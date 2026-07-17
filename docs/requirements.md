@@ -1,6 +1,6 @@
 # ClassCue Product Requirements
 
-Status: Initial requirements confirmed through user discussion on 16 July 2026.
+Status: Reviewed and confirmed as the product baseline on 17 July 2026. MVP interpretation and user journeys are documented separately.
 
 ## Product purpose
 
@@ -33,10 +33,12 @@ ClassCue helps a parent see which child has which extracurricular class and when
 
 ## Attendance and punctuality
 
-- Attendance states include on time, late, absent, cancelled, rescheduled, and makeup.
+- Session status records whether a session is scheduled, cancelled, rescheduled, a holiday exception, or a makeup session.
+- Attendance separately records attended, absent, or not yet recorded for sessions that take place.
+- Punctuality separately records on time or late for an attended session.
 - On time is the default for an attended session.
 - When a child is late, the parent records the number of minutes late.
-- Punctuality is tracked separately from schedule changes and session type.
+- Attendance and punctuality remain separate from schedule changes and session type.
 - The primary attendance insight is attendance rate.
 - Supporting insights include late arrivals and cancelled or makeup session balances.
 

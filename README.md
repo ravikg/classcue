@@ -6,7 +6,7 @@ The repository uses [vinext](https://github.com/cloudflare/vinext), with Cloudfl
 
 ## Current Status
 
-The product foundation, recurring classes, attendance, schedule exceptions, and fees/payments stages are complete. A signed-in parent can manage classes, attendance, makeups, flexible fee arrangements, due amounts, adjustments, payments, currencies, and prepaid-session balances without rewriting history.
+The product foundation, recurring classes, attendance, schedule exceptions, fees/payments, and parent-controlled reminders stages are complete. A signed-in parent can manage classes, attendance, makeups, flexible fee arrangements, due amounts, payments, reminders, and reviewed data-based suggestions without rewriting history.
 
 ## Product Documentation
 
@@ -87,11 +87,24 @@ Dates and times use Gulf Standard Time (`Asia/Dubai`, UTC+4).
 - Added safe D1 billing migrations, household-scoped authorization, currency-aware validation, and regression coverage.
 - Verified all four fee models plus mixed currencies, first and later adjustments, partial and full payments, previous-payment suggestions, and package-balance consumption through authenticated end-to-end flows.
 
+### 18 July 2026, 12:48 AM GST — Reminders and reviewed suggestions completed
+
+- Added independent reminder rules for upcoming classes, fee due dates, and repeating overdue fees, including on/off controls and parent-selected timing.
+- Added idempotent reminder jobs, a persistent in-app inbox, upcoming reminders, and delivery/dismissal history.
+- Added browser notifications while ClassCue is open, plus native phone sharing with clipboard fallback for class and fee reminders.
+- Automatically cancelled pending reminder jobs when a class changes, a rule is disabled, or a fee becomes fully paid.
+- Added explainable, data-based reminder suggestions that never change records until the parent explicitly accepts them.
+- Routed accepted suggestions through the same validated reminder command and recorded accept/dismiss decisions in an audit log.
+- Clearly labelled the current suggestion engine as deterministic rather than generative AI because no OpenAI API credential is configured.
+- Added safe D1 migrations and regression coverage for reminder idempotency, household isolation, paid-fee cancellation, notification wiring, and reviewed suggestions.
+- Verified the production build, TypeScript, lint, contract tests, and an authenticated class-reminder and overdue-fee flow through acceptance, delivery, payment, and cancellation.
+
 ### Next stage
 
-- Add configurable class, upcoming-fee, and repeating overdue-fee reminders.
-- Add notification delivery history and phone-friendly reminder sharing for classes and fees.
-- Add the first parent-reviewed AI suggestions for fee explanations, reminder timing, and household patterns.
+- Complete reusable contact management, household settings, and archive/edit flows.
+- Add closed-app Web Push through a delivery provider and scheduled worker; the current browser delivery runs while ClassCue is open.
+- Optionally add an OpenAI-powered suggestion adapter once an API credential is configured, while keeping parent review mandatory.
+- Run the final accessibility, responsive-layout, and production-readiness pass.
 
 ## Prerequisites
 

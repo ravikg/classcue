@@ -90,6 +90,41 @@ type FeesSnapshot = {
   childSummaries: { childId: string; currency: string; dueAmountMinor: number; paidAmountMinor: number }[];
 };
 
+type ReminderRule = {
+  id: string;
+  type: string;
+  leadMinutes: number;
+  repeatIntervalMinutes: number | null;
+  enabled: boolean;
+  enrollmentId: string | null;
+  feeArrangementId: string | null;
+  targetName: string;
+};
+
+type ReminderJob = {
+  id: string;
+  type: string;
+  scheduledFor: string;
+  status: string;
+  sentAt: string | null;
+  title: string;
+  body: string;
+  shareText: string;
+  relatedRecordType: string;
+  relatedRecordId: string;
+};
+
+type Suggestion = {
+  id: string;
+  type: string;
+  explanation: string;
+  source: string;
+  status: string;
+  createdAt: string;
+  evidence: Record<string, unknown>;
+  proposedAction: Record<string, unknown>;
+};
+
 type AttendanceHistory = {
   sessionId: string;
   enrollmentName: string;
@@ -141,6 +176,8 @@ type Snapshot = {
   children: Child[];
   upcomingSessions: ClassSession[];
   fees: FeesSnapshot;
+  reminders: { rules: ReminderRule[]; dueJobs: ReminderJob[]; upcomingJobs: ReminderJob[]; deliveryHistory: ReminderJob[] };
+  suggestions: Suggestion[];
 };
 
 type Tab = "today" | "children" | "fees" | "more";
@@ -163,6 +200,8 @@ export function ClassCueApp({ displayName }: { displayName: string }) {
   const [paymentCharge, setPaymentCharge] = useState<FeeCharge | null>(null);
   const [adjustCharge, setAdjustCharge] = useState<FeeCharge | null>(null);
   const [newChargeArrangement, setNewChargeArrangement] = useState<FeeArrangement | null>(null);
+  const [reminderSetupOpen, setReminderSetupOpen] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">("default");
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -178,9 +217,18 @@ export function ClassCueApp({ displayName }: { displayName: string }) {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       load().catch((reason: Error) => setError(reason.message));
+      setNotificationPermission("Notification" in window ? Notification.permission : "unsupported");
     }, 0);
     return () => window.clearTimeout(timer);
   }, [load]);
+
+  useEffect(() => {
+    if (notificationPermission !== "granted") return;
+    const check = () => deliverDueNotifications().then((delivered) => delivered > 0 ? load() : undefined).catch(() => undefined);
+    const timer = window.setTimeout(check, 250);
+    const interval = window.setInterval(check, 60_000);
+    return () => { window.clearTimeout(timer); window.clearInterval(interval); };
+  }, [load, notificationPermission]);
 
   const refresh = async () => {
     await load();
@@ -191,9 +239,33 @@ export function ClassCueApp({ displayName }: { displayName: string }) {
     setPaymentCharge(null);
     setAdjustCharge(null);
     setNewChargeArrangement(null);
+    setReminderSetupOpen(false);
   };
 
   const openAttendance = (session: ClassSession) => setAttendanceSession(session);
+
+  async function enableNotifications() {
+    if (!("Notification" in window) || !("serviceWorker" in navigator)) { setNotificationPermission("unsupported"); return; }
+    await navigator.serviceWorker.register("/classcue-sw.js");
+    const permission = await Notification.requestPermission();
+    setNotificationPermission(permission);
+    if (permission === "granted") { await deliverDueNotifications(); await load(); }
+  }
+
+  async function toggleReminder(rule: ReminderRule) {
+    await fetch(`/api/reminder-rules/${rule.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ enabled: !rule.enabled }) });
+    await load();
+  }
+
+  async function actOnReminder(job: ReminderJob, status: "delivered" | "dismissed") {
+    await fetch(`/api/reminder-jobs/${job.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ status }) });
+    await load();
+  }
+
+  async function reviewSuggestion(suggestion: Suggestion, decision: "accept" | "dismiss") {
+    await fetch(`/api/suggestions/${suggestion.id}/review`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ decision }) });
+    await load();
+  }
 
   return (
     <main className="app-shell">
@@ -214,10 +286,10 @@ export function ClassCueApp({ displayName }: { displayName: string }) {
         <LoadingState />
       ) : (
         <div className="app-content">
-          {tab === "today" && <TodayView snapshot={snapshot} onAddChild={() => setSheet("child")} onAddClass={() => setSheet("enrollment")} onAttendance={openAttendance} onSchedule={setScheduleSession} onPayment={setPaymentCharge} />}
+          {tab === "today" && <TodayView snapshot={snapshot} onAddChild={() => setSheet("child")} onAddClass={() => setSheet("enrollment")} onAttendance={openAttendance} onSchedule={setScheduleSession} onPayment={setPaymentCharge} onReminderAction={actOnReminder} />}
           {tab === "children" && <ChildrenView snapshot={snapshot} onAddChild={() => setSheet("child")} onAddClass={() => setSheet("enrollment")} onAttendance={openAttendance} />}
           {tab === "fees" && <FeesView snapshot={snapshot} onSetup={() => setFeeSetupOpen(true)} onPayment={setPaymentCharge} onAdjust={setAdjustCharge} onNewCharge={setNewChargeArrangement} />}
-          {tab === "more" && <MoreView snapshot={snapshot} />}
+          {tab === "more" && <MoreView snapshot={snapshot} notificationPermission={notificationPermission} onEnableNotifications={enableNotifications} onSetupReminder={() => setReminderSetupOpen(true)} onToggleReminder={toggleReminder} onReminderAction={actOnReminder} onReviewSuggestion={reviewSuggestion} />}
         </div>
       )}
 
@@ -237,11 +309,12 @@ export function ClassCueApp({ displayName }: { displayName: string }) {
       {paymentCharge && <PaymentSheet charge={paymentCharge} today={snapshot?.household.today ?? ""} onClose={() => setPaymentCharge(null)} onSaved={refresh} />}
       {adjustCharge && <FeeAdjustmentSheet charge={adjustCharge} onClose={() => setAdjustCharge(null)} onSaved={refresh} />}
       {newChargeArrangement && snapshot && <NewChargeSheet arrangement={newChargeArrangement} today={snapshot.household.today} onClose={() => setNewChargeArrangement(null)} onSaved={refresh} />}
+      {reminderSetupOpen && snapshot && <ReminderSetupSheet snapshot={snapshot} onClose={() => setReminderSetupOpen(false)} onSaved={refresh} />}
     </main>
   );
 }
 
-function TodayView({ snapshot, onAddChild, onAddClass, onAttendance, onSchedule, onPayment }: { snapshot: Snapshot; onAddChild: () => void; onAddClass: () => void; onAttendance: (session: ClassSession) => void; onSchedule: (session: ClassSession) => void; onPayment: (charge: FeeCharge) => void }) {
+function TodayView({ snapshot, onAddChild, onAddClass, onAttendance, onSchedule, onPayment, onReminderAction }: { snapshot: Snapshot; onAddChild: () => void; onAddClass: () => void; onAttendance: (session: ClassSession) => void; onSchedule: (session: ClassSession) => void; onPayment: (charge: FeeCharge) => void; onReminderAction: (job: ReminderJob, status: "delivered" | "dismissed") => Promise<void> }) {
   const todaySessions = snapshot.upcomingSessions.filter((session) => session.localDate === snapshot.household.today);
   const nextSessions = snapshot.upcomingSessions.filter((session) => session.localDate >= snapshot.household.today).slice(0, 4);
   const attendanceDue = todaySessions.filter((session) => session.canRecordAttendance && !session.attendanceStatus).length;
@@ -274,6 +347,8 @@ function TodayView({ snapshot, onAddChild, onAddClass, onAttendance, onSchedule,
             <div><strong>{snapshot.children.length}</strong><span>Children</span></div>
             <div><strong>{snapshot.children.reduce((sum, child) => sum + child.enrollments.length, 0)}</strong><span>Classes</span></div>
           </section>
+
+          {snapshot.reminders.dueJobs.length > 0 && <section className="today-reminders"><div className="section-heading"><div><p className="eyebrow">Reminder inbox</p><h2>Ready now</h2></div></div>{snapshot.reminders.dueJobs.slice(0, 3).map((job) => <ReminderCue key={job.id} job={job} onAction={onReminderAction} />)}</section>}
 
           {snapshot.fees.dueCharges.length > 0 && (
             <section className="today-fees">
@@ -365,10 +440,26 @@ function ChildrenView({ snapshot, onAddChild, onAddClass, onAttendance }: { snap
   );
 }
 
-function MoreView({ snapshot }: { snapshot: Snapshot }) {
+function MoreView({ snapshot, notificationPermission, onEnableNotifications, onSetupReminder, onToggleReminder, onReminderAction, onReviewSuggestion }: { snapshot: Snapshot; notificationPermission: NotificationPermission | "unsupported"; onEnableNotifications: () => Promise<void>; onSetupReminder: () => void; onToggleReminder: (rule: ReminderRule) => Promise<void>; onReminderAction: (job: ReminderJob, status: "delivered" | "dismissed") => Promise<void>; onReviewSuggestion: (suggestion: Suggestion, decision: "accept" | "dismiss") => Promise<void> }) {
   return (
     <>
-      <section className="page-intro"><p className="eyebrow">Account</p><h1>More</h1><p>Household settings and support information.</p></section>
+      <section className="page-intro"><p className="eyebrow">Reminders and account</p><h1>More</h1><p>Control what ClassCue brings to your attention. Nothing is shared or changed without your action.</p></section>
+      <section className={`notification-card ${notificationPermission}`}>
+        <div className="notification-icon">◉</div><div><span>Browser notifications</span><strong>{notificationPermission === "granted" ? "Enabled on this device" : notificationPermission === "denied" ? "Blocked in browser settings" : notificationPermission === "unsupported" ? "Not supported on this device" : "Not enabled yet"}</strong><p>ClassCue checks for due reminders while the app is open. Your reminder inbox remains available either way.</p></div>
+        {notificationPermission === "default" && <button className="primary-button" onClick={() => onEnableNotifications()}>Enable notifications</button>}
+      </section>
+
+      <div className="section-heading more-section-heading"><div><p className="eyebrow">Your rules</p><h2>Reminder timing</h2></div><button className="text-button" onClick={onSetupReminder}>+ Configure</button></div>
+      {snapshot.reminders.rules.length === 0 ? <section className="empty-card compact"><h3>No reminder rules yet</h3><p>Set class, fee-due, or repeating overdue reminders independently.</p><button className="primary-button" onClick={onSetupReminder}>Set first reminder</button></section> : <section className="reminder-rule-list">{snapshot.reminders.rules.map((rule) => <article className="reminder-rule-card" key={rule.id}><div><span>{reminderTypeLabel(rule.type)}</span><strong>{rule.targetName}</strong><small>{reminderTimingLabel(rule)}</small></div><button className={`toggle-button ${rule.enabled ? "on" : ""}`} role="switch" aria-checked={rule.enabled} onClick={() => onToggleReminder(rule)}><span></span>{rule.enabled ? "On" : "Off"}</button></article>)}</section>}
+
+      {snapshot.reminders.dueJobs.length > 0 && <><div className="section-heading more-section-heading"><div><p className="eyebrow">Inbox</p><h2>Ready now</h2></div></div><section className="reminder-inbox">{snapshot.reminders.dueJobs.map((job) => <ReminderCue key={job.id} job={job} onAction={onReminderAction} />)}</section></>}
+      {snapshot.reminders.upcomingJobs.length > 0 && <><div className="section-heading more-section-heading"><div><p className="eyebrow">Scheduled</p><h2>Coming reminders</h2></div></div><section className="upcoming-reminders">{snapshot.reminders.upcomingJobs.slice(0, 6).map((job) => <article key={job.id}><div><strong>{job.title}</strong><p>{job.body}</p></div><time>{dateTimeLabel(job.scheduledFor)}</time></article>)}</section></>}
+
+      {snapshot.suggestions.length > 0 && <><div className="section-heading more-section-heading"><div><p className="eyebrow">Review first</p><h2>ClassCue suggestions</h2></div></div><section className="suggestion-list">{snapshot.suggestions.map((suggestion) => <article className="suggestion-card" key={suggestion.id}><div className="suggestion-label"><span>Data-based suggestion</span><small>Rule engine · not generative AI</small></div><p>{suggestion.explanation}</p><div className="suggestion-actions"><button className="primary-button" onClick={() => onReviewSuggestion(suggestion, "accept")}>Accept suggestion</button><button className="secondary-button" onClick={() => onReviewSuggestion(suggestion, "dismiss")}>Dismiss</button></div></article>)}</section></>}
+
+      {snapshot.reminders.deliveryHistory.length > 0 && <><div className="section-heading more-section-heading"><div><p className="eyebrow">History</p><h2>Recent reminders</h2></div></div><section className="delivery-history">{snapshot.reminders.deliveryHistory.slice(0, 6).map((job) => <div key={job.id}><span className={job.status}>{job.status === "delivered" ? "✓" : "×"}</span><div><strong>{job.title}</strong><small>{dateTimeLabel(job.sentAt ?? job.scheduledFor)}</small></div></div>)}</section></>}
+
+      <div className="section-heading more-section-heading"><div><p className="eyebrow">Account</p><h2>Household</h2></div></div>
       <section className="settings-card">
         <div><span>Signed in as</span><strong>{snapshot.user.displayName}</strong></div>
         <div><span>Household timezone</span><strong>{snapshot.household.timezone}</strong></div>
@@ -377,6 +468,10 @@ function MoreView({ snapshot }: { snapshot: Snapshot }) {
       <a className="secondary-button full-width" href="/signout-with-chatgpt?return_to=/">Sign out</a>
     </>
   );
+}
+
+function ReminderCue({ job, onAction }: { job: ReminderJob; onAction: (job: ReminderJob, status: "delivered" | "dismissed") => Promise<void> }) {
+  return <article className={`reminder-cue ${job.type}`}><div><span>{reminderTypeLabel(job.type)}</span><strong>{job.title}</strong><p>{job.body}</p></div><div className="reminder-actions"><button onClick={() => shareReminder(job)}>Share</button><button onClick={() => onAction(job, "dismissed")}>Dismiss</button><button className="done" onClick={() => onAction(job, "delivered")}>Done</button></div></article>;
 }
 
 function FeesView({ snapshot, onSetup, onPayment, onAdjust, onNewCharge }: { snapshot: Snapshot; onSetup: () => void; onPayment: (charge: FeeCharge) => void; onAdjust: (charge: FeeCharge) => void; onNewCharge: (arrangement: FeeArrangement) => void }) {
@@ -540,6 +635,23 @@ function NewChargeSheet({ arrangement, today, onClose, onSaved }: { arrangement:
     await onSaved();
   }
   return <Sheet title={`${arrangement.childName} · ${arrangement.enrollmentName}`} subtitle="Add the next fee" onClose={onClose}><form onSubmit={submit} className="sheet-form"><div className="future-preview"><strong>{feeModelLabel(arrangement.model)} suggestion</strong><p>{arrangement.model === "per_session" ? "ClassCue counts scheduled and makeup sessions in the selected period." : arrangement.model === "monthly" || arrangement.model === "term" ? "ClassCue uses the previous paid amount when available, otherwise the configured amount." : `ClassCue uses the ${arrangement.sessionsIncluded ?? 0}-session package price.`}</p></div><div className="replacement-grid"><label>Period starts<input name="periodStart" type="date" defaultValue={monthStart(today)} required /></label><label>Period ends<input name="periodEnd" type="date" defaultValue={monthEnd(today)} required /></label><label className="span-two">Payment due<input name="dueDate" type="date" defaultValue={today} required /></label></div><p className="muted">After the fee is created, its calculation is visible and you can confirm a different amount with a reason.</p>{error && <p className="form-error">{error}</p>}<button className="primary-button" disabled={saving}>{saving ? "Calculating…" : "Create suggested fee"}</button></form></Sheet>;
+}
+
+function ReminderSetupSheet({ snapshot, onClose, onSaved }: { snapshot: Snapshot; onClose: () => void; onSaved: () => Promise<void> }) {
+  const [type, setType] = useState<"class" | "fee_due" | "fee_overdue">("class");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const enrollments = snapshot.children.flatMap((child) => child.enrollments.map((enrollment) => ({ ...enrollment, childName: child.name })));
+  const feeTargets = snapshot.fees.arrangements;
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setSaving(true); setError(null);
+    const form = Object.fromEntries(new FormData(event.currentTarget));
+    const body = { type, enrollmentId: type === "class" ? form.enrollmentId : null, feeArrangementId: type === "class" ? null : form.feeArrangementId, leadMinutes: type === "fee_overdue" ? 0 : Number(form.leadMinutes), repeatIntervalMinutes: type === "fee_overdue" ? Number(form.repeatIntervalMinutes) : null };
+    const response = await fetch("/api/reminder-rules", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    if (!response.ok) { const data = await response.json() as { error?: string }; setError(data.error ?? "Could not save this reminder."); setSaving(false); return; }
+    await onSaved();
+  }
+  return <Sheet title="Configure a reminder" subtitle="Independent timing for each class or fee" onClose={onClose}><form onSubmit={submit} className="sheet-form reminder-form"><fieldset><legend>Reminder type</legend><div className="model-options reminder-type-options"><button type="button" className={type === "class" ? "selected" : ""} onClick={() => setType("class")}><strong>Upcoming class</strong><small>Time, place, and teacher</small></button><button type="button" className={type === "fee_due" ? "selected" : ""} onClick={() => setType("fee_due")}><strong>Fee due</strong><small>Before or on due date</small></button><button type="button" className={type === "fee_overdue" ? "selected" : ""} onClick={() => setType("fee_overdue")}><strong>Overdue fee</strong><small>Repeat until paid</small></button></div></fieldset>{type === "class" ? <label>Child and class<select name="enrollmentId" required>{enrollments.map((enrollment) => <option key={enrollment.id} value={enrollment.id}>{enrollment.childName} · {enrollment.name}</option>)}</select></label> : feeTargets.length > 0 ? <label>Child and fee<select name="feeArrangementId" required>{feeTargets.map((arrangement) => <option key={arrangement.id} value={arrangement.id}>{arrangement.childName} · {arrangement.enrollmentName}</option>)}</select></label> : <p className="form-error">Add a fee arrangement before configuring fee reminders.</p>}{type !== "fee_overdue" && <label>Notify me<select name="leadMinutes" defaultValue={type === "class" ? 60 : 1440}>{type === "class" ? <><option value="15">15 minutes before</option><option value="30">30 minutes before</option><option value="60">1 hour before</option><option value="120">2 hours before</option><option value="1440">1 day before</option></> : <><option value="0">On the due date</option><option value="1440">1 day before</option><option value="4320">3 days before</option><option value="10080">7 days before</option></>}</select></label>}{type === "fee_overdue" && <label>Repeat<select name="repeatIntervalMinutes" defaultValue="4320"><option value="1440">Every day</option><option value="4320">Every 3 days</option><option value="10080">Every 7 days</option><option value="20160">Every 14 days</option><option value="43200">Every 30 days</option></select></label>}<div className="calculation-note"><strong>Parent controlled</strong><p>Saving creates or updates this one rule. ClassCue never shares a reminder or changes another record automatically.</p></div>{error && <p className="form-error">{error}</p>}<button className="primary-button" disabled={saving || (type !== "class" && feeTargets.length === 0)}>{saving ? "Scheduling…" : "Save reminder rule"}</button></form></Sheet>;
 }
 
 function AttendanceSheet({ session, onClose, onSaved }: { session: ClassSession; onClose: () => void; onSaved: () => Promise<void> }) {
@@ -709,3 +821,21 @@ function monthStart(value: string) { return `${value.slice(0, 7)}-01`; }
 function monthEnd(value: string) { const [year, month] = value.split("-").map(Number); return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10); }
 function periodLabel(charge: Pick<FeeCharge, "periodStart" | "periodEnd">) { const start = shortDate(charge.periodStart); const end = shortDate(charge.periodEnd); return charge.periodStart === charge.periodEnd ? start : `${start} – ${end}`; }
 async function shareFee(charge: FeeCharge) { const text = `${charge.childName} · ${charge.enrollmentName}: ${formatMoney(charge.outstandingAmountMinor || charge.confirmedAmountMinor, charge.currency)} ${charge.status === "paid" ? "paid" : `due ${shortDate(charge.dueDate)}`}.`; if (navigator.share) await navigator.share({ title: "ClassCue fee reminder", text }).catch(() => undefined); else await navigator.clipboard?.writeText(text).catch(() => undefined); }
+function reminderTypeLabel(type: string) { return ({ class: "Upcoming class", fee_due: "Fee due", fee_overdue: "Overdue fee" } as Record<string, string>)[type] ?? type; }
+function reminderTimingLabel(rule: ReminderRule) { if (rule.type === "fee_overdue") return `Repeats every ${Math.round((rule.repeatIntervalMinutes ?? 1440) / 1440)} ${Math.round((rule.repeatIntervalMinutes ?? 1440) / 1440) === 1 ? "day" : "days"} until paid`; if (rule.leadMinutes === 0) return "On the due date"; if (rule.leadMinutes < 60) return `${rule.leadMinutes} minutes before`; if (rule.leadMinutes < 1440) return `${rule.leadMinutes / 60} ${rule.leadMinutes === 60 ? "hour" : "hours"} before`; return `${rule.leadMinutes / 1440} ${rule.leadMinutes === 1440 ? "day" : "days"} before`; }
+function dateTimeLabel(value: string) { return new Intl.DateTimeFormat("en", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(new Date(value)); }
+async function shareReminder(job: ReminderJob) { if (navigator.share) await navigator.share({ title: job.title, text: job.shareText }).catch(() => undefined); else await navigator.clipboard?.writeText(job.shareText).catch(() => undefined); }
+async function deliverDueNotifications() {
+  if (!("Notification" in window) || Notification.permission !== "granted" || !("serviceWorker" in navigator)) return 0;
+  const registration = await navigator.serviceWorker.register("/classcue-sw.js");
+  const response = await fetch("/api/reminder-jobs/due", { cache: "no-store" });
+  if (!response.ok) return 0;
+  const data = await response.json() as { jobs: ReminderJob[] };
+  let delivered = 0;
+  for (const job of data.jobs) {
+    await registration.showNotification(job.title, { body: job.body, tag: job.id, data: { url: `/?reminder=${job.id}` } });
+    const marked = await fetch(`/api/reminder-jobs/${job.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ status: "delivered" }) });
+    if (marked.ok) delivered += 1;
+  }
+  return delivered;
+}

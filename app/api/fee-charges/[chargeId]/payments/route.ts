@@ -51,6 +51,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ cha
         .bind(paymentId, charge.id, amountMinor, charge.currency, body.paidAt, body.method, reference, note, context.userId, amountMinor, charge.id, charge.id),
       d1.prepare("UPDATE fee_charges SET status = CASE WHEN COALESCE((SELECT SUM(amount_minor) FROM payments WHERE fee_charge_id = ?), 0) >= confirmed_amount_minor THEN 'paid' ELSE 'due' END, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
         .bind(charge.id, charge.id),
+      d1.prepare("UPDATE reminder_jobs SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE related_record_type = 'fee_charge' AND related_record_id = ? AND status = 'pending' AND (SELECT status FROM fee_charges WHERE id = ?) = 'paid'")
+        .bind(charge.id, charge.id),
     ];
     if (isPaid && charge.model === "package" && charge.sessionsIncluded) {
       statements.push(d1.prepare("INSERT OR IGNORE INTO session_credit_entries (id, enrollment_id, fee_charge_id, entry_type, quantity, reason) SELECT ?, ?, ?, 'purchase', ?, 'Paid session package' WHERE (SELECT status FROM fee_charges WHERE id = ?) = 'paid'")

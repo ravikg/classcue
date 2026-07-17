@@ -348,3 +348,98 @@ export const sessionCreditEntries = sqliteTable(
     uniqueIndex("session_credit_entries_session_type_uidx").on(table.sessionId, table.entryType),
   ],
 );
+
+export const reminderRules = sqliteTable(
+  "reminder_rules",
+  {
+    id: text("id").primaryKey(),
+    householdId: text("household_id")
+      .notNull()
+      .references(() => households.id, { onDelete: "cascade" }),
+    enrollmentId: text("enrollment_id").references(() => enrollments.id, { onDelete: "cascade" }),
+    feeArrangementId: text("fee_arrangement_id").references(() => feeArrangements.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    leadMinutes: integer("lead_minutes").notNull().default(0),
+    repeatIntervalMinutes: integer("repeat_interval_minutes"),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    timezone: text("timezone").notNull(),
+    version: integer("version").notNull().default(1),
+    ...timestamps,
+  },
+  (table) => [
+    index("reminder_rules_household_idx").on(table.householdId),
+    index("reminder_rules_enrollment_idx").on(table.enrollmentId),
+    index("reminder_rules_fee_arrangement_idx").on(table.feeArrangementId),
+  ],
+);
+
+export const reminderJobs = sqliteTable(
+  "reminder_jobs",
+  {
+    id: text("id").primaryKey(),
+    ruleId: text("rule_id")
+      .notNull()
+      .references(() => reminderRules.id, { onDelete: "cascade" }),
+    relatedRecordType: text("related_record_type").notNull(),
+    relatedRecordId: text("related_record_id").notNull(),
+    scheduledFor: text("scheduled_for").notNull(),
+    status: text("status").notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    deliveryChannel: text("delivery_channel").notNull().default("browser"),
+    providerMessageId: text("provider_message_id"),
+    lastError: text("last_error"),
+    sentAt: text("sent_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("reminder_jobs_idempotency_uidx").on(table.ruleId, table.relatedRecordId, table.scheduledFor),
+    index("reminder_jobs_status_schedule_idx").on(table.status, table.scheduledFor),
+  ],
+);
+
+export const suggestions = sqliteTable(
+  "suggestions",
+  {
+    id: text("id").primaryKey(),
+    householdId: text("household_id")
+      .notNull()
+      .references(() => households.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    evidenceJson: text("evidence_json").notNull(),
+    proposedActionJson: text("proposed_action_json").notNull(),
+    explanation: text("explanation").notNull(),
+    source: text("source").notNull().default("rules_v1"),
+    status: text("status").notNull().default("pending"),
+    reviewedByUserId: text("reviewed_by_user_id").references(() => users.id),
+    reviewedAt: text("reviewed_at"),
+    expiresAt: text("expires_at"),
+    ...timestamps,
+  },
+  (table) => [
+    index("suggestions_household_status_idx").on(table.householdId, table.status),
+  ],
+);
+
+export const auditEvents = sqliteTable(
+  "audit_events",
+  {
+    id: text("id").primaryKey(),
+    householdId: text("household_id")
+      .notNull()
+      .references(() => households.id, { onDelete: "cascade" }),
+    actorUserId: text("actor_user_id")
+      .notNull()
+      .references(() => users.id),
+    entityType: text("entity_type").notNull(),
+    entityId: text("entity_id").notNull(),
+    action: text("action").notNull(),
+    beforeJson: text("before_json"),
+    afterJson: text("after_json"),
+    occurredAt: text("occurred_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("audit_events_household_idx").on(table.householdId),
+    index("audit_events_entity_idx").on(table.entityType, table.entityId),
+  ],
+);

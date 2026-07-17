@@ -4,6 +4,7 @@ import initialMigration from "@/drizzle/0000_dusty_sunfire.sql?raw";
 import scheduleMigration from "@/drizzle/0001_tiresome_marten_broadcloak.sql?raw";
 import sessionLocationMigration from "@/drizzle/0002_oval_cable.sql?raw";
 import billingMigration from "@/drizzle/0003_cute_guardian.sql?raw";
+import reminderMigration from "@/drizzle/0004_fixed_elektra.sql?raw";
 import * as schema from "./schema";
 
 let initialization: Promise<void> | null = null;
@@ -65,6 +66,11 @@ async function initializeDatabase(d1: D1Database) {
   const billingStatements = idempotentCreateStatements(billingMigration);
   if (billingStatements.length > 0) {
     await d1.batch(billingStatements.map((statement) => d1.prepare(statement)));
+  }
+
+  const reminderStatements = idempotentCreateStatements(reminderMigration);
+  if (reminderStatements.length > 0) {
+    await d1.batch(reminderStatements.map((statement) => d1.prepare(statement)));
   }
 }
 

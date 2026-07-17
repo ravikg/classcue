@@ -208,6 +208,55 @@ button { color: inherit; }
 .settings-card strong { text-align: right; font-size: 13px; }
 .full-width { width: 100%; margin-top: 14px; }
 
+.today-reminders { display: grid; gap: 10px; margin-bottom: 28px; }
+.more-section-heading { margin-top: 30px; }
+.notification-card { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 13px; padding: 17px; border: 1px solid #cbdaf5; border-radius: 20px; background: var(--blue-soft); }
+.notification-card.granted { border-color: #c2dfcf; background: var(--green-soft); }
+.notification-icon { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 14px; background: var(--white); font-size: 20px; }
+.notification-card strong, .notification-card small { display: block; }
+.notification-card small { margin-top: 3px; color: var(--ink-soft); font-size: 10px; line-height: 1.4; }
+.notification-card .text-button { white-space: nowrap; }
+.empty-card.compact { padding: 20px; }
+.empty-card.compact h3 { margin-top: 0; }
+.reminder-rule-list, .reminder-inbox, .suggestion-list { display: grid; gap: 10px; }
+.reminder-rule-card { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 16px; border: 1px solid var(--line); border-radius: 18px; background: var(--white); }
+.reminder-rule-card > div { display: grid; gap: 3px; }
+.reminder-rule-card span { color: var(--blue); font-size: 9px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
+.reminder-rule-card strong { font-size: 13px; }
+.reminder-rule-card small { color: var(--ink-soft); font-size: 10px; }
+.toggle-button { display: flex; flex: none; align-items: center; gap: 6px; padding: 5px 9px 5px 5px; border: 0; border-radius: 999px; background: #e3e7e4; color: #68746f; font-size: 9px; font-weight: 850; cursor: pointer; }
+.toggle-button span { width: 22px; height: 22px; border-radius: 50%; background: var(--white); box-shadow: 0 1px 4px rgba(18,53,45,.15); }
+.toggle-button.on { background: var(--green); color: white; }
+.reminder-cue { display: grid; gap: 13px; padding: 17px; border: 1px solid #cbdaf5; border-radius: 19px; background: var(--blue-soft); }
+.reminder-cue.fee_due, .reminder-cue.fee_overdue { border-color: #efcf9a; background: var(--gold-soft); }
+.reminder-cue > div:first-child { display: grid; gap: 4px; }
+.reminder-cue > div:first-child > span { color: var(--blue); font-size: 9px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
+.reminder-cue.fee_due > div:first-child > span, .reminder-cue.fee_overdue > div:first-child > span { color: #8a5c0b; }
+.reminder-cue strong { font-size: 14px; }
+.reminder-cue p { margin: 0; color: var(--ink-soft); font-size: 11px; line-height: 1.45; }
+.reminder-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+.reminder-actions button { min-height: 36px; border: 1px solid rgba(18,53,45,.12); border-radius: 11px; background: rgba(255,255,255,.7); color: var(--ink); font-size: 10px; font-weight: 800; cursor: pointer; }
+.reminder-actions button.done { border-color: var(--green); background: var(--green); color: white; }
+.upcoming-reminders, .delivery-history { overflow: hidden; border: 1px solid var(--line); border-radius: 18px; background: var(--white); }
+.upcoming-reminders article { display: flex; justify-content: space-between; gap: 14px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.upcoming-reminders article:last-child, .delivery-history > div:last-child { border-bottom: 0; }
+.upcoming-reminders strong, .upcoming-reminders p { display: block; margin: 0; font-size: 11px; }
+.upcoming-reminders p { margin-top: 3px; color: var(--ink-soft); }
+.upcoming-reminders time { flex: none; color: var(--ink-soft); font-size: 9px; text-align: right; }
+.suggestion-card { padding: 17px; border: 1px solid #d9d0ed; border-radius: 19px; background: #f5f0ff; }
+.suggestion-label { display: flex; justify-content: space-between; gap: 12px; }
+.suggestion-label span { color: #6b48a8; font-size: 9px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
+.suggestion-label small { color: #806fa0; font-size: 8px; }
+.suggestion-card p { margin: 10px 0 14px; font-size: 12px; line-height: 1.5; }
+.suggestion-actions { display: flex; gap: 8px; }
+.suggestion-actions button { min-height: 38px; padding: 0 13px; }
+.delivery-history > div { display: flex; align-items: center; gap: 11px; padding: 13px 16px; border-bottom: 1px solid var(--line); }
+.delivery-history > div > span { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--green-soft); color: var(--green); font-size: 11px; font-weight: 900; }
+.delivery-history > div > span.dismissed { background: #eef0ee; color: #78817d; }
+.delivery-history strong, .delivery-history small { display: block; font-size: 10px; }
+.delivery-history small { margin-top: 2px; color: var(--ink-soft); }
+.reminder-type-options { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
 .bottom-nav { position: fixed; z-index: 25; bottom: max(12px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: min(calc(100% - 24px), 700px); display: grid; grid-template-columns: repeat(4, 1fr); padding: 8px; border: 1px solid rgba(18,53,45,.1); border-radius: 22px; background: rgba(255,254,250,.94); backdrop-filter: blur(22px); box-shadow: 0 18px 45px rgba(18,53,45,.16); }
 .bottom-nav button { display: flex; flex-direction: column; align-items: center; gap: 3px; min-height: 52px; justify-content: center; border: 0; border-radius: 15px; background: none; color: #71817c; font-size: 10px; font-weight: 750; cursor: pointer; }
 .bottom-nav button span { font-size: 18px; font-weight: 800; line-height: 1; }
@@ -312,6 +361,11 @@ button { color: inherit; }
   .fee-actions { grid-template-columns: 1fr 1fr; }
   .fee-actions .share-action { min-height: 39px; }
   .money-grid { grid-template-columns: 1fr; }
+  .notification-card { grid-template-columns: auto 1fr; }
+  .notification-card .text-button { grid-column: 1 / -1; width: 100%; min-height: 38px; border-radius: 11px; background: rgba(255,255,255,.7); }
+  .reminder-type-options { grid-template-columns: 1fr; }
+  .suggestion-label { flex-direction: column; gap: 3px; }
+  .suggestion-actions { display: grid; grid-template-columns: 1fr 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {

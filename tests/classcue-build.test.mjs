@@ -104,3 +104,38 @@ test("fees keep suggestions, parent adjustments, currencies, and payments audita
   assert.match(ui, /How ClassCue calculated it/);
   assert.match(ui, /Partial payments are supported/);
 });
+
+test("reminders are idempotent, household scoped, and stop when fees are paid", async () => {
+  const [migration, commands, reminderQuery, paymentRoute, worker] = await Promise.all([
+    readFile(new URL("drizzle/0004_fixed_elektra.sql", root), "utf8"),
+    readFile(new URL("src/modules/reminders/commands.ts", root), "utf8"),
+    readFile(new URL("src/modules/reminders/queries.ts", root), "utf8"),
+    readFile(new URL("app/api/fee-charges/[chargeId]/payments/route.ts", root), "utf8"),
+    readFile(new URL("public/classcue-sw.js", root), "utf8"),
+  ]);
+
+  for (const table of ["reminder_rules", "reminder_jobs", "suggestions", "audit_events"]) {
+    assert.match(migration, new RegExp("CREATE TABLE `" + table + "`"));
+  }
+  assert.match(migration, /reminder_jobs_idempotency_uidx/);
+  assert.match(commands, /ON CONFLICT\(rule_id, related_record_id, scheduled_for\)/);
+  assert.match(commands, /status = 'cancelled'/);
+  assert.match(reminderQuery, /rules\.household_id = \?/);
+  assert.match(paymentRoute, /UPDATE reminder_jobs SET status = 'cancelled'/);
+  assert.match(worker, /notificationclick/);
+});
+
+test("suggestions require explicit parent review and use the normal reminder command", async () => {
+  const [engine, reviewRoute, ui] = await Promise.all([
+    readFile(new URL("src/modules/suggestions/engine.ts", root), "utf8"),
+    readFile(new URL("app/api/suggestions/[suggestionId]/review/route.ts", root), "utf8"),
+    readFile(new URL("app/ClassCueApp.tsx", root), "utf8"),
+  ]);
+
+  assert.match(engine, /saveReminderRule\(context, action\)/);
+  assert.match(engine, /INSERT INTO audit_events/);
+  assert.match(reviewRoute, /decision !== "accept" && body\.decision !== "dismiss"/);
+  assert.match(ui, /Rule engine · not generative AI/);
+  assert.match(ui, /Saving creates or updates this one rule/);
+  assert.match(ui, /ClassCue checks for due reminders while the app is open/);
+});

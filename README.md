@@ -152,6 +152,13 @@ Dates and times use Gulf Standard Time (`Asia/Dubai`, UTC+4).
 - Requires successful server revocation before removing the local subscription so failed disable actions remain recoverable.
 - Reverified all 13 regression checks, TypeScript, ESLint, and the production build.
 
+### 18 July 2026, 1:47 AM GST — Production dependency audit cleared
+
+- Audited the current production dependency tree against the npm advisory database.
+- Replaced Next.js’s vulnerable nested PostCSS release with the patched `8.5.19` release through a narrow package override.
+- Confirmed the production dependency audit now reports zero known vulnerabilities without downgrading Next.js or using a forced breaking update.
+- Reverified all 13 regression checks, TypeScript, ESLint, and the production build after the dependency change.
+
 ### Next stage
 
 - Configure the OpenAI API key, run one live structured-output acceptance call, and deploy the connected AI stage.

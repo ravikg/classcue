@@ -6,13 +6,15 @@ The repository uses [vinext](https://github.com/cloudflare/vinext), with Cloudfl
 
 ## Current Status
 
-Product requirements, MVP scope, user journeys, and the initial mobile mockups are complete. The next stage is the technical architecture and core data model.
+Product requirements, MVP scope, user journeys, initial mobile mockups, data model, and application architecture are complete. The next stage is the first implementation slice.
 
 ## Product Documentation
 
 - `docs/requirements.md` — confirmed product requirements.
 - `docs/mvp-scope.md` — MVP boundaries, success criteria, and deferred capabilities.
 - `docs/user-journeys.md` — navigation, screen map, interaction rules, and core journeys.
+- `docs/data-model.md` — entities, relationships, invariants, indexes, and migration sequence.
+- `docs/architecture.md` — runtime choices, module boundaries, request flows, security, and implementation sequence.
 - `outputs/classcue-user-journey/` — editable HTML mockups, rendered boards, and the PowerPoint walkthrough.
 
 ## Project Progress
@@ -29,11 +31,20 @@ Dates and times use Gulf Standard Time (`Asia/Dubai`, UTC+4).
 - Agreed to update this progress log, commit, and push after each completed stage.
 - Related commits: `d12e701`, `bb7c070`.
 
+### 17 July 2026, 10:26 PM GST — Data model and architecture established
+
+- Defined the household ownership boundary and a future-compatible membership model while retaining one active parent for the MVP.
+- Modelled children, reusable contacts, providers, enrollments, versioned schedules, concrete sessions, attendance, punctuality, fees, payments, session-credit ledgers, reminders, AI proposals, and audit history.
+- Selected a modular-monolith architecture using Vinext, TypeScript, Cloudflare D1, and Drizzle.
+- Kept authentication, notifications, file storage, and AI behind adapters so hackathon choices can change later.
+- Defined server-side household authorization, money and timezone rules, historical preservation, idempotency, and optimistic concurrency.
+- Split delivery into seven implementation stages beginning with the child-to-Today vertical slice.
+
 ### Next stage
 
-- Define the core data model and application architecture.
-- Convert the approved journeys into implementation-ready entities, relationships, modules, and boundaries.
-- Record decisions and open questions before starting the first vertical implementation slice.
+- Curate and commit the generated application scaffold.
+- Configure the initial D1 schema and identity/household boundary.
+- Build the first vertical slice: child → enrollment → recurring schedule → generated sessions → Today.
 
 ## Prerequisites
 

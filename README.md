@@ -6,7 +6,7 @@ The repository uses [vinext](https://github.com/cloudflare/vinext), with Cloudfl
 
 ## Current Status
 
-The product foundation and first working vertical slice are complete. A signed-in parent can create a household, add a child, add a recurring class with provider and teacher details, generate the next 90 days of sessions, and see upcoming classes in the phone-first Today and Children views.
+The product foundation, recurring-class flow, and attendance stage are complete. A signed-in parent can create a household, add children and recurring classes, see generated sessions, record or edit on-time, late, and absent attendance, and review child-level attendance and lateness summaries.
 
 ## Product Documentation
 
@@ -53,11 +53,22 @@ Dates and times use Gulf Standard Time (`Asia/Dubai`, UTC+4).
 - Added a ClassCue social-preview image and product metadata.
 - Verified TypeScript, the production build, migration structure, and an authenticated child-to-session flow.
 
+### 17 July 2026, 11:51 PM GST — Attendance and punctuality completed
+
+- Added household-scoped attendance recording for scheduled and makeup sessions after they start.
+- Kept session status, attendance, and punctuality as separate persisted fields.
+- Added on-time as the attended default, late-arrival minutes from 1–360, absent status, and optional notes.
+- Added safe editing so changing late to absent clears punctuality and minutes without changing the session schedule.
+- Added phone-first attendance controls, quick lateness presets, and clear parent confirmation language.
+- Added attendance rate, late-arrival count, average minutes late, and recent session history for each child.
+- Expanded the household snapshot to include up to 90 days of recent sessions for missed attendance entry.
+- Verified the production build, type checks, contract tests, and authenticated late-to-absent end-to-end flow.
+
 ### Next stage
 
-- Add attendance and punctuality recording to eligible sessions.
-- Default attended sessions to on time while allowing minutes-late capture.
-- Add the child attendance summary and basic lateness insights.
+- Add single-session cancellation, rescheduling, holiday exceptions, and linked makeup sessions.
+- Preserve the original session and keep future recurrence unchanged unless the parent explicitly selects it.
+- Add change previews and makeup-balance visibility before beginning fees.
 
 ## Prerequisites
 

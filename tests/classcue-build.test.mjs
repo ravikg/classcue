@@ -39,3 +39,20 @@ test("first D1 migration preserves the vertical-slice boundaries", async () => {
   assert.match(migration, /sessions_rule_date_uidx/);
   assert.match(migration, /providers_household_name_uidx/);
 });
+
+test("attendance keeps schedule, presence, and punctuality separate", async () => {
+  const [route, query, ui] = await Promise.all([
+    readFile(new URL("app/api/sessions/[sessionId]/attendance/route.ts", root), "utf8"),
+    readFile(new URL("src/modules/today/queries.ts", root), "utf8"),
+    readFile(new URL("app/ClassCueApp.tsx", root), "utf8"),
+  ]);
+
+  assert.match(route, /attendanceStatus !== "attended"/);
+  assert.match(route, /punctuality = body\.punctuality === "late" \? "late" : "on_time"/);
+  assert.match(route, /minutesLate < 1 \|\| minutesLate > 360/);
+  assert.match(route, /session\.status !== "scheduled" && session\.status !== "makeup"/);
+  assert.match(query, /attendanceRate:/);
+  assert.match(query, /averageMinutesLate:/);
+  assert.match(ui, /Schedule stays separate/);
+  assert.match(ui, /Save .*minutes late/);
+});

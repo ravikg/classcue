@@ -16,6 +16,29 @@ type Child = {
   name: string;
   color: string;
   enrollments: Enrollment[];
+  attendanceSummary: {
+    recorded: number;
+    attended: number;
+    absent: number;
+    attendanceRate: number | null;
+    lateArrivals: number;
+    averageMinutesLate: number | null;
+  };
+  recentAttendance: AttendanceHistory[];
+  recentSessions: ClassSession[];
+};
+
+type AttendanceHistory = {
+  sessionId: string;
+  enrollmentName: string;
+  providerName: string | null;
+  localDate: string;
+  plannedStartAt: string;
+  timezone: string;
+  attendanceStatus: string;
+  punctuality: string | null;
+  minutesLate: number | null;
+  note: string | null;
 };
 
 type ClassSession = {
@@ -32,6 +55,11 @@ type ClassSession = {
   plannedEndAt: string;
   timezone: string;
   status: string;
+  attendanceStatus: string | null;
+  punctuality: string | null;
+  minutesLate: number | null;
+  attendanceNote: string | null;
+  canRecordAttendance: boolean;
 };
 
 type Snapshot = {
@@ -55,6 +83,7 @@ export function ClassCueApp({ displayName }: { displayName: string }) {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [tab, setTab] = useState<Tab>("today");
   const [sheet, setSheet] = useState<Sheet>(null);
+  const [attendanceSession, setAttendanceSession] = useState<ClassSession | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -74,7 +103,10 @@ export function ClassCueApp({ displayName }: { displayName: string }) {
   const refresh = async () => {
     await load();
     setSheet(null);
+    setAttendanceSession(null);
   };
+
+  const openAttendance = (session: ClassSession) => setAttendanceSession(session);
 
   return (
     <main className="app-shell">
@@ -95,8 +127,8 @@ export function ClassCueApp({ displayName }: { displayName: string }) {
         <LoadingState />
       ) : (
         <div className="app-content">
-          {tab === "today" && <TodayView snapshot={snapshot} onAddChild={() => setSheet("child")} onAddClass={() => setSheet("enrollment")} />}
-          {tab === "children" && <ChildrenView snapshot={snapshot} onAddChild={() => setSheet("child")} onAddClass={() => setSheet("enrollment")} />}
+          {tab === "today" && <TodayView snapshot={snapshot} onAddChild={() => setSheet("child")} onAddClass={() => setSheet("enrollment")} onAttendance={openAttendance} />}
+          {tab === "children" && <ChildrenView snapshot={snapshot} onAddChild={() => setSheet("child")} onAddClass={() => setSheet("enrollment")} onAttendance={openAttendance} />}
           {tab === "fees" && <ComingSoon title="Fees are the next domain" body="The data model is ready for mixed currencies, monthly fees, terms, packages, adjustments, and parent-confirmed payments." />}
           {tab === "more" && <MoreView snapshot={snapshot} />}
         </div>
@@ -112,13 +144,15 @@ export function ClassCueApp({ displayName }: { displayName: string }) {
 
       {sheet === "child" && <ChildSheet onClose={() => setSheet(null)} onSaved={refresh} />}
       {sheet === "enrollment" && snapshot && <EnrollmentSheet children={snapshot.children} onClose={() => setSheet(null)} onSaved={refresh} />}
+      {attendanceSession && <AttendanceSheet session={attendanceSession} onClose={() => setAttendanceSession(null)} onSaved={refresh} />}
     </main>
   );
 }
 
-function TodayView({ snapshot, onAddChild, onAddClass }: { snapshot: Snapshot; onAddChild: () => void; onAddClass: () => void }) {
+function TodayView({ snapshot, onAddChild, onAddClass, onAttendance }: { snapshot: Snapshot; onAddChild: () => void; onAddClass: () => void; onAttendance: (session: ClassSession) => void }) {
   const todaySessions = snapshot.upcomingSessions.filter((session) => session.localDate === snapshot.household.today);
   const nextSessions = snapshot.upcomingSessions.filter((session) => session.localDate >= snapshot.household.today).slice(0, 4);
+  const attendanceDue = todaySessions.filter((session) => session.canRecordAttendance && !session.attendanceStatus).length;
   const firstName = snapshot.user.displayName.split(/\s|@/)[0];
   const displaySessions = todaySessions.length > 0 ? todaySessions : nextSessions;
 
@@ -127,7 +161,7 @@ function TodayView({ snapshot, onAddChild, onAddClass }: { snapshot: Snapshot; o
       <section className="page-intro">
         <p className="eyebrow">{longDate(snapshot.household.today)}</p>
         <h1>{snapshot.children.length === 0 ? `Welcome, ${firstName}` : `Good ${dayPart()}, ${firstName}`}</h1>
-        <p>{snapshot.children.length === 0 ? "Let’s put the first class on your family’s cue." : todaySessions.length > 0 ? `${todaySessions.length} ${todaySessions.length === 1 ? "class" : "classes"} need your attention today.` : "Nothing urgent today. Here’s what is coming next."}</p>
+        <p>{snapshot.children.length === 0 ? "Let’s put the first class on your family’s cue." : attendanceDue > 0 ? `${attendanceDue} ${attendanceDue === 1 ? "class needs" : "classes need"} attendance now.` : todaySessions.length > 0 ? `${todaySessions.length} ${todaySessions.length === 1 ? "class is" : "classes are"} on today’s schedule.` : "Nothing urgent today. Here’s what is coming next."}</p>
       </section>
 
       {snapshot.children.length === 0 ? (
@@ -157,7 +191,7 @@ function TodayView({ snapshot, onAddChild, onAddClass }: { snapshot: Snapshot; o
             <section className="empty-card"><h3>No class sessions yet</h3><p>Add a recurring class and ClassCue will prepare the next 90 days.</p><button className="primary-button" onClick={onAddClass}>Add a class</button></section>
           ) : (
             <section className="session-list">
-              {displaySessions.map((session) => <SessionCard key={session.id} session={session} showDate={todaySessions.length === 0} />)}
+              {displaySessions.map((session) => <SessionCard key={session.id} session={session} showDate={todaySessions.length === 0} onAttendance={onAttendance} />)}
             </section>
           )}
         </>
@@ -166,22 +200,29 @@ function TodayView({ snapshot, onAddChild, onAddClass }: { snapshot: Snapshot; o
   );
 }
 
-function SessionCard({ session, showDate }: { session: ClassSession; showDate: boolean }) {
+function SessionCard({ session, showDate, onAttendance }: { session: ClassSession; showDate: boolean; onAttendance: (session: ClassSession) => void }) {
+  const recorded = Boolean(session.attendanceStatus);
   return (
-    <article className="session-card">
+    <article className={`session-card ${recorded ? "recorded" : ""}`}>
       <div className={`child-dot ${session.childColor}`}>{session.childName.slice(0, 1).toUpperCase()}</div>
       <div className="session-main">
-        <div className="session-topline"><span>{session.childName}</span><span className="status-pill">Scheduled</span></div>
+        <div className="session-topline"><span>{session.childName}</span><span className={`status-pill ${recorded ? attendanceTone(session) : ""}`}>{recorded ? attendanceLabel(session) : "Scheduled"}</span></div>
         <h3>{session.enrollmentName}</h3>
         <p>{showDate ? `${shortDate(session.localDate)} · ` : ""}{timeRange(session)}</p>
         <p>{[session.providerName, session.location].filter(Boolean).join(" · ") || "Location not added"}</p>
       </div>
-      <button className="round-action" aria-label={`Open ${session.enrollmentName}`}>›</button>
+      {session.canRecordAttendance ? (
+        <button className={`attendance-action ${recorded ? "edit" : ""}`} onClick={() => onAttendance(session)} aria-label={`${recorded ? "Edit" : "Record"} attendance for ${session.enrollmentName}`}>
+          {recorded ? "Edit" : "Record"}
+        </button>
+      ) : (
+        <span className="future-cue">Upcoming</span>
+      )}
     </article>
   );
 }
 
-function ChildrenView({ snapshot, onAddChild, onAddClass }: { snapshot: Snapshot; onAddChild: () => void; onAddClass: () => void }) {
+function ChildrenView({ snapshot, onAddChild, onAddClass, onAttendance }: { snapshot: Snapshot; onAddChild: () => void; onAddClass: () => void; onAttendance: (session: ClassSession) => void }) {
   return (
     <>
       <div className="section-heading page-heading"><div><p className="eyebrow">Family</p><h1>Children</h1></div><button className="text-button" onClick={onAddChild}>+ Add child</button></div>
@@ -194,6 +235,22 @@ function ChildrenView({ snapshot, onAddChild, onAddClass }: { snapshot: Snapshot
                 {child.enrollments.map((enrollment) => <span key={enrollment.id}>{enrollment.name}<small>{enrollment.providerName}</small></span>)}
                 {child.enrollments.length === 0 && <p className="muted">No classes yet.</p>}
               </div>
+              <div className="attendance-stats" aria-label={`${child.name} attendance summary`}>
+                <div><strong>{child.attendanceSummary.attendanceRate === null ? "—" : `${child.attendanceSummary.attendanceRate}%`}</strong><span>Attendance</span></div>
+                <div><strong>{child.attendanceSummary.lateArrivals}</strong><span>Late arrivals</span></div>
+                <div><strong>{child.attendanceSummary.averageMinutesLate === null ? "—" : `${child.attendanceSummary.averageMinutesLate}m`}</strong><span>Average late</span></div>
+              </div>
+              {child.recentSessions.length > 0 && (
+                <div className="attendance-history">
+                  <div className="mini-heading"><strong>Recent sessions</strong><span>{child.attendanceSummary.recorded} recorded</span></div>
+                  {child.recentSessions.slice(0, 4).map((session) => (
+                    <button key={session.id} className="history-row" onClick={() => onAttendance(session)} disabled={!session.canRecordAttendance}>
+                      <span><strong>{session.enrollmentName}</strong><small>{shortDate(session.localDate)} · {timeRange(session)}</small></span>
+                      <span className={`history-status ${session.attendanceStatus ? attendanceTone(session) : "pending"}`}>{session.attendanceStatus ? attendanceLabel(session) : "Record"}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
               <button className="secondary-button" onClick={onAddClass}>Add a class for {child.name}</button>
             </article>
           ))}
@@ -255,6 +312,63 @@ function EnrollmentSheet({ children, onClose, onSaved }: { children: Child[]; on
   return <Sheet title="Add a recurring class" subtitle="Class details and weekly schedule" onClose={onClose}><form onSubmit={submit} className="sheet-form two-column"><label>Child<select name="childId" required>{children.map((child) => <option value={child.id} key={child.id}>{child.name}</option>)}</select></label><label>Subject<input name="subject" required maxLength={100} placeholder="Math tuition" /></label><label className="span-two">Institute or teacher business<input name="instituteName" required maxLength={120} placeholder="Bright Minds Centre" /></label><label>Teacher name<input name="teacherName" maxLength={100} placeholder="Mr. Ali" /></label><label>Teacher phone<input name="teacherPhone" maxLength={40} inputMode="tel" placeholder="+971…" /></label><label>Weekly day<select name="weekday" required>{weekdays.map((day, index) => <option key={day} value={index}>{day}</option>)}</select></label><label>Start time<input name="startTime" type="time" required defaultValue="16:00" /></label><label>Duration<select name="durationMinutes" defaultValue="60"><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option></select></label><label>Location<input name="location" maxLength={160} placeholder="Room 3 or online" /></label>{error && <p className="form-error span-two">{error}</p>}<button className="primary-button span-two" disabled={saving}>{saving ? "Creating sessions…" : "Add class and prepare sessions"}</button></form></Sheet>;
 }
 
+function AttendanceSheet({ session, onClose, onSaved }: { session: ClassSession; onClose: () => void; onSaved: () => Promise<void> }) {
+  const initialChoice = session.attendanceStatus === "absent" ? "absent" : session.punctuality === "late" ? "late" : "on_time";
+  const [choice, setChoice] = useState<"on_time" | "late" | "absent">(initialChoice);
+  const [minutesLate, setMinutesLate] = useState(session.minutesLate ?? 5);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setSaving(true); setError(null);
+    const form = new FormData(event.currentTarget);
+    const response = await fetch(`/api/sessions/${session.id}/attendance`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        attendanceStatus: choice === "absent" ? "absent" : "attended",
+        punctuality: choice === "absent" ? null : choice,
+        minutesLate: choice === "late" ? minutesLate : null,
+        note: form.get("note"),
+      }),
+    });
+    if (!response.ok) {
+      const data = await response.json() as { error?: string };
+      setError(data.error ?? "Could not save attendance."); setSaving(false); return;
+    }
+    await onSaved();
+  }
+
+  return (
+    <Sheet title={`${session.childName} · ${session.enrollmentName}`} subtitle="Attendance and punctuality" onClose={onClose}>
+      <form onSubmit={submit} className="sheet-form attendance-form">
+        <div className="attendance-context">
+          <div><span>{shortDate(session.localDate)}</span><strong>{timeRange(session)}</strong></div>
+          <div><span>Session status</span><strong>Scheduled</strong></div>
+        </div>
+        <fieldset>
+          <legend>What happened?</legend>
+          <div className="attendance-options">
+            <button type="button" className={choice === "on_time" ? "selected" : ""} aria-pressed={choice === "on_time"} onClick={() => setChoice("on_time")}><span>✓</span><strong>On time</strong><small>Attended as planned</small></button>
+            <button type="button" className={choice === "late" ? "selected late" : ""} aria-pressed={choice === "late"} onClick={() => setChoice("late")}><span>+m</span><strong>Late</strong><small>Capture minutes</small></button>
+            <button type="button" className={choice === "absent" ? "selected absent" : ""} aria-pressed={choice === "absent"} onClick={() => setChoice("absent")}><span>×</span><strong>Absent</strong><small>Class took place</small></button>
+          </div>
+        </fieldset>
+        {choice === "late" && (
+          <div className="minutes-panel">
+            <label>Minutes late<input type="number" min={1} max={360} value={minutesLate} onChange={(event) => setMinutesLate(Number(event.target.value))} required /></label>
+            <div className="minute-presets" aria-label="Quick minute choices">{[5, 10, 15, 20].map((minutes) => <button type="button" key={minutes} className={minutesLate === minutes ? "active" : ""} onClick={() => setMinutesLate(minutes)}>{minutes}m</button>)}</div>
+          </div>
+        )}
+        <label>Optional note<textarea name="note" maxLength={500} defaultValue={session.attendanceNote ?? ""} placeholder={choice === "late" ? "e.g. traffic near the centre" : "Add context if useful"} /></label>
+        <div className="separation-note"><strong>Schedule stays separate</strong><p>This records attendance and punctuality only. It will not change the recurring class or session status.</p></div>
+        {error && <p className="form-error">{error}</p>}
+        <button className="primary-button" disabled={saving}>{saving ? "Saving…" : session.attendanceStatus ? "Update attendance" : choice === "late" ? `Save ${minutesLate} minutes late` : choice === "absent" ? "Save absent" : "Save on time"}</button>
+      </form>
+    </Sheet>
+  );
+}
+
 function Sheet({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: React.ReactNode }) {
   return <div className="sheet-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="bottom-sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title"><div className="sheet-handle"></div><header><div><p className="eyebrow">{subtitle}</p><h2 id="sheet-title">{title}</h2></div><button className="close-button" onClick={onClose} aria-label="Close">×</button></header>{children}</section></div>;
 }
@@ -265,3 +379,5 @@ function dayPart() { const hour = new Date().getHours(); return hour < 12 ? "mor
 function longDate(value: string) { return new Intl.DateTimeFormat("en", { weekday: "long", day: "numeric", month: "long" }).format(new Date(`${value}T12:00:00`)); }
 function shortDate(value: string) { return new Intl.DateTimeFormat("en", { weekday: "short", day: "numeric", month: "short" }).format(new Date(`${value}T12:00:00`)); }
 function timeRange(session: ClassSession) { const format = (value: string) => new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit", timeZone: session.timezone }).format(new Date(value)); return `${format(session.plannedStartAt)}–${format(session.plannedEndAt)}`; }
+function attendanceLabel(session: Pick<ClassSession, "attendanceStatus" | "punctuality" | "minutesLate">) { if (session.attendanceStatus === "absent") return "Absent"; if (session.punctuality === "late") return `${session.minutesLate ?? 0} min late`; return "On time"; }
+function attendanceTone(session: Pick<ClassSession, "attendanceStatus" | "punctuality">) { if (session.attendanceStatus === "absent") return "absent"; if (session.punctuality === "late") return "late"; return "on-time"; }

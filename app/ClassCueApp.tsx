@@ -294,11 +294,12 @@ export function ClassCueApp({ displayName }: { displayName: string }) {
       setNotificationPermission(permission);
       if (permission === "granted") {
         const configResponse = await fetch("/api/push-subscriptions", { cache: "no-store" });
-        const config = await configResponse.json() as { configured?: boolean; publicKey?: string | null; error?: string };
+        const config = await configResponse.json() as { configured?: boolean; publicKey?: string | null; subscriptions?: Array<{ endpoint?: string }>; error?: string };
         setPushConfigured(Boolean(config.configured));
         if (!configResponse.ok) throw new Error(config.error ?? "Notification setup could not be loaded.");
         if (!config.configured || !config.publicKey || !("PushManager" in window)) throw new Error("Closed-app notifications are not configured yet.");
-        const existing = await registration.pushManager.getSubscription();
+        let existing = await registration.pushManager.getSubscription();
+        if (existing && !config.subscriptions?.some((item) => item.endpoint === existing?.endpoint)) { await existing.unsubscribe(); existing = null; }
         const subscription = existing ?? await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: base64urlToUint8Array(config.publicKey) });
         const saved = await fetch("/api/push-subscriptions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...subscription.toJSON(), endpoint: subscription.endpoint, deviceLabel: deviceLabel() }) });
         if (!saved.ok) { const data = await saved.json() as { error?: string }; throw new Error(data.error ?? "This device could not be registered."); }
@@ -315,7 +316,8 @@ export function ClassCueApp({ displayName }: { displayName: string }) {
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.getSubscription();
       if (subscription) {
-        await fetch("/api/push-subscriptions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "unsubscribe", endpoint: subscription.endpoint }) });
+        const response = await fetch("/api/push-subscriptions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "unsubscribe", endpoint: subscription.endpoint }) });
+        if (!response.ok) throw new Error("Device removal failed.");
         await subscription.unsubscribe();
       }
       setPushEnabled(false);
@@ -1049,10 +1051,11 @@ async function inspectPushSubscription(): Promise<{ enabled: boolean; configured
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) return { enabled: false, configured: false };
   const response = await fetch("/api/push-subscriptions", { cache: "no-store" });
   if (!response.ok) return { enabled: false, configured: false };
-  const data = await response.json() as { configured?: boolean };
+  const data = await response.json() as { configured?: boolean; subscriptions?: Array<{ endpoint?: string }> };
   const registration = await navigator.serviceWorker.getRegistration("/");
   const subscription = await registration?.pushManager.getSubscription();
-  return { enabled: Boolean(subscription), configured: Boolean(data.configured) };
+  const registeredForCurrentParent = Boolean(subscription && data.subscriptions?.some((item) => item.endpoint === subscription.endpoint));
+  return { enabled: registeredForCurrentParent, configured: Boolean(data.configured) };
 }
 function base64urlToUint8Array(value: string) {
   const padding = "=".repeat((4 - value.length % 4) % 4);

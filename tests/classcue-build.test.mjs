@@ -185,6 +185,7 @@ test("closed-app push is household scoped, scheduled, and retryable", async () =
   assert.match(worker, /async scheduled/);
   assert.match(vite, /crons: \["\* \* \* \* \*"\]/);
   assert.match(ui, /registration\.pushManager\.subscribe/);
+  assert.match(ui, /item\.endpoint === subscription\.endpoint/);
   assert.match(ui, /add ClassCue to your Home Screen first/);
 });
 

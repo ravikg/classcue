@@ -134,10 +134,6 @@ Dates and times use Gulf Standard Time (`Asia/Dubai`, UTC+4).
 - Preserved the in-app reminder inbox and open-app browser delivery as fallbacks when notifications are unsupported, blocked, or disabled.
 - Verified 12 regression checks, TypeScript, ESLint, the production build, and the emitted one-minute cron configuration.
 
-### Next stage
-
-- Complete a live-device notification enable/send/receive acceptance check.
-
 ### 18 July 2026, 1:40 AM GST — Privacy-scoped OpenAI insight adapter completed
 
 - Added an on-demand OpenAI Responses API adapter for fee explanations, attendance and punctuality patterns, and reminder-timing proposals.
@@ -148,6 +144,13 @@ Dates and times use Gulf Standard Time (`Asia/Dubai`, UTC+4).
 - Added a ten-minute household rate limit and an audit event for every model-generation request to control API usage and preserve accountability.
 - Added clear UI labels separating AI-generated insights from the ClassCue rule engine, plus an honest disconnected state until an API key is configured.
 - Verified 13 regression checks, TypeScript, ESLint, and the production build. A live OpenAI call remains pending until `OPENAI_API_KEY` is added as a Sites secret.
+
+### 18 July 2026, 1:44 AM GST — Notification ownership edge case hardened
+
+- Changed device status checks to confirm that the browser push endpoint is registered to the currently signed-in parent, rather than trusting browser state alone.
+- Safely replaces a stale subscription from a previous account before registering the current parent, avoiding a misleading enabled state on shared devices.
+- Requires successful server revocation before removing the local subscription so failed disable actions remain recoverable.
+- Reverified all 13 regression checks, TypeScript, ESLint, and the production build.
 
 ### Next stage
 

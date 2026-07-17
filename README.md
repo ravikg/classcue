@@ -6,7 +6,7 @@ The repository uses [vinext](https://github.com/cloudflare/vinext), with Cloudfl
 
 ## Current Status
 
-Product requirements, MVP scope, user journeys, initial mobile mockups, data model, and application architecture are complete. The next stage is the first implementation slice.
+The product foundation and first working vertical slice are complete. A signed-in parent can create a household, add a child, add a recurring class with provider and teacher details, generate the next 90 days of sessions, and see upcoming classes in the phone-first Today and Children views.
 
 ## Product Documentation
 
@@ -40,11 +40,24 @@ Dates and times use Gulf Standard Time (`Asia/Dubai`, UTC+4).
 - Defined server-side household authorization, money and timezone rules, historical preservation, idempotency, and optimistic concurrency.
 - Split delivery into seven implementation stages beginning with the child-to-Today vertical slice.
 
+### 17 July 2026, 11:31 PM GST — First working vertical slice completed
+
+- Replaced the generated loading scaffold with the ClassCue product shell and approved visual direction.
+- Added the signed-out introduction plus signed-in Today, Children, Fees, and More navigation.
+- Enabled the logical D1 binding and added the first generated migration with 11 relational tables.
+- Implemented server-side signed-in identity resolution and household-scoped data access.
+- Implemented child creation and recurring-class setup with reusable provider and teacher records.
+- Added timezone-aware, idempotent generation of a rolling 90-day session horizon.
+- Added a household snapshot API that groups upcoming classes by child.
+- Added safe runtime database initialization for local previews and packaged migrations for hosted releases.
+- Added a ClassCue social-preview image and product metadata.
+- Verified TypeScript, the production build, migration structure, and an authenticated child-to-session flow.
+
 ### Next stage
 
-- Curate and commit the generated application scaffold.
-- Configure the initial D1 schema and identity/household boundary.
-- Build the first vertical slice: child → enrollment → recurring schedule → generated sessions → Today.
+- Add attendance and punctuality recording to eligible sessions.
+- Default attended sessions to on time while allowing minutes-late capture.
+- Add the child attendance summary and basic lateness insights.
 
 ## Prerequisites
 
@@ -58,16 +71,16 @@ npm run dev
 npm run build
 ```
 
-This starter does not use `wrangler.jsonc`.
+The local database initializes from the generated migration on the first authenticated request. This project does not use `wrangler.jsonc`.
 
 ## Included Shape
 
-- edit site code under `app/`
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/schema.ts` starts intentionally empty
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
+- `app/` contains the phone-first product surface and authenticated API routes.
+- `src/modules/` contains household, scheduling, and Today domain logic.
+- `db/schema.ts` defines the relational D1 schema.
+- `drizzle/` contains generated, reviewed SQL migrations.
+- `.openai/hosting.json` declares the Sites D1 binding; R2 remains disabled.
+- `vite.config.ts` provides Cloudflare-compatible local and production builds.
 
 ## Workspace Auth Headers
 
@@ -131,7 +144,7 @@ actions tied to the current ChatGPT user. Leave public content anonymous.
 
 - `npm run dev`: start local development
 - `npm run build`: verify the vinext build output
-- `npm test`: build the starter and verify its rendered loading skeleton
+- `npm test`: build ClassCue and verify the product shell and initial migration
 - `npm run db:generate`: generate Drizzle migrations after schema changes
 
 ## Learn More

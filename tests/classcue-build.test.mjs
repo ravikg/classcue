@@ -123,6 +123,7 @@ test("reminders are idempotent, household scoped, and stop when fees are paid", 
   assert.match(reminderQuery, /rules\.household_id = \?/);
   assert.match(paymentRoute, /UPDATE reminder_jobs SET status = 'cancelled'/);
   assert.match(worker, /notificationclick/);
+  assert.match(worker, /addEventListener\("push"/);
 });
 
 test("suggestions require explicit parent review and use the normal reminder command", async () => {
@@ -193,4 +194,28 @@ test("household and record maintenance remains server scoped and phone accessibl
   assert.match(ui, /Edit household settings/);
   assert.match(ui, /Online-class link/);
   assert.match(styles, /\.contact-card/);
+});
+
+test("the phone experience is installable and keeps private app data out of caches", async () => {
+  const [manifest, layout, worker, ui, styles] = await Promise.all([
+    readFile(new URL("app/manifest.ts", root), "utf8"),
+    readFile(new URL("app/layout.tsx", root), "utf8"),
+    readFile(new URL("public/classcue-sw.js", root), "utf8"),
+    readFile(new URL("app/ClassCueApp.tsx", root), "utf8"),
+    readFile(new URL("app/globals.css", root), "utf8"),
+    access(new URL("public/icon-192.png", root)),
+    access(new URL("public/icon-512.png", root)),
+    access(new URL("public/apple-touch-icon.png", root)),
+  ]);
+
+  assert.match(manifest, /display: "standalone"/);
+  assert.match(manifest, /portrait-primary/);
+  assert.match(layout, /appleWebApp/);
+  assert.match(worker, /skipWaiting/);
+  assert.doesNotMatch(worker, /caches\.open|cache\.put/);
+  assert.match(ui, /beforeinstallprompt/);
+  assert.match(ui, /Add to Home Screen/);
+  assert.match(ui, /aria-current/);
+  assert.match(ui, /event\.key === "Escape"/);
+  assert.match(styles, /focus-visible/);
 });

@@ -112,11 +112,22 @@ Dates and times use Gulf Standard Time (`Asia/Dubai`, UTC+4).
 - Added a database constraint for one primary teacher per enrollment plus household-scoped maintenance APIs and regression coverage.
 - Verified contact reuse across two children, primary-teacher handoff, stale-edit protection, profile and household updates, online links, archive/restore, and resumed session generation through an authenticated end-to-end flow.
 
+### 18 July 2026, 1:17 AM GST — Installability and production-readiness pass completed
+
+- Added a standards-based web-app manifest, branded app icons, iPhone home-screen metadata, portrait phone orientation, and standalone display mode.
+- Added an in-app install surface with browser install prompting, iPhone Add to Home Screen guidance, and installed-state feedback.
+- Hardened the service-worker lifecycle and added a push-event handler while keeping private household responses out of offline caches.
+- Added visible, dismissible error feedback for reminder actions, suggestion review, notification permission, class restoration, and installation failures.
+- Added keyboard focus indicators, current-page navigation semantics, Escape-to-close dialogs, dialog descriptions, and focus restoration.
+- Added a plain-language privacy summary explaining account ownership, parent-confirmed suggestions, tap-initiated sharing, and the no-payment-processing boundary.
+- Verified the generated manifest content type and payload, all app-icon responses, service-worker delivery, cross-household isolation for new maintenance routes, and the complete production build.
+- Expanded the regression suite to 11 passing checks covering the installable phone surface and the rule that private app data is never cached offline.
+
 ### Next stage
 
 - Add closed-app Web Push through a delivery provider and scheduled worker; the current browser delivery runs while ClassCue is open.
 - Optionally add an OpenAI-powered suggestion adapter once an API credential is configured, while keeping parent review mandatory.
-- Add installable-app metadata and run the final accessibility, responsive-layout, privacy, and production-readiness pass.
+- Complete the final live-device acceptance check after closed-app push is connected.
 
 ## Prerequisites
 

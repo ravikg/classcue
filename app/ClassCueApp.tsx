@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Enrollment = {
   id: string;
@@ -192,6 +192,7 @@ type Snapshot = {
 
 type Tab = "today" | "children" | "fees" | "more";
 type Sheet = "child" | "enrollment" | null;
+type InstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: "accepted" | "dismissed" }> };
 
 const navItems: { id: Tab; label: string; icon: string }[] = [
   { id: "today", label: "Today", icon: "⌂" },
@@ -217,6 +218,10 @@ export function ClassCueApp({ displayName }: { displayName: string }) {
   const [householdSettingsOpen, setHouseholdSettingsOpen] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">("default");
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -235,6 +240,18 @@ export function ClassCueApp({ displayName }: { displayName: string }) {
     }, 0);
     return () => window.clearTimeout(timer);
   }, [load]);
+
+  useEffect(() => {
+    const initialize = window.setTimeout(() => {
+      setIsStandalone(window.matchMedia("(display-mode: standalone)").matches || Boolean((navigator as Navigator & { standalone?: boolean }).standalone));
+      setIsIOS(/iPad|iPhone|iPod/.test(navigator.userAgent));
+    }, 0);
+    const beforeInstall = (event: Event) => { event.preventDefault(); setInstallPrompt(event as InstallPromptEvent); };
+    const installed = () => { setInstallPrompt(null); setIsStandalone(true); };
+    window.addEventListener("beforeinstallprompt", beforeInstall);
+    window.addEventListener("appinstalled", installed);
+    return () => { window.clearTimeout(initialize); window.removeEventListener("beforeinstallprompt", beforeInstall); window.removeEventListener("appinstalled", installed); };
+  }, []);
 
   useEffect(() => {
     if (notificationPermission !== "granted") return;
@@ -263,33 +280,49 @@ export function ClassCueApp({ displayName }: { displayName: string }) {
   const openAttendance = (session: ClassSession) => setAttendanceSession(session);
 
   async function enableNotifications() {
+    setActionError(null);
     if (!("Notification" in window) || !("serviceWorker" in navigator)) { setNotificationPermission("unsupported"); return; }
-    await navigator.serviceWorker.register("/classcue-sw.js");
-    const permission = await Notification.requestPermission();
-    setNotificationPermission(permission);
-    if (permission === "granted") { await deliverDueNotifications(); await load(); }
+    try {
+      await navigator.serviceWorker.register("/classcue-sw.js");
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+      if (permission === "granted") { await deliverDueNotifications(); await load(); }
+    } catch { setActionError("Notifications could not be enabled on this device. Your in-app reminder inbox still works."); }
   }
 
   async function toggleReminder(rule: ReminderRule) {
-    await fetch(`/api/reminder-rules/${rule.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ enabled: !rule.enabled }) });
+    setActionError(null);
+    const response = await fetch(`/api/reminder-rules/${rule.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ enabled: !rule.enabled }) });
+    if (!response.ok) { const data = await response.json() as { error?: string }; setActionError(data.error ?? "Could not update this reminder."); return; }
     await load();
   }
 
   async function actOnReminder(job: ReminderJob, status: "delivered" | "dismissed") {
-    await fetch(`/api/reminder-jobs/${job.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ status }) });
+    setActionError(null);
+    const response = await fetch(`/api/reminder-jobs/${job.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ status }) });
+    if (!response.ok) { const data = await response.json() as { error?: string }; setActionError(data.error ?? "Could not update this reminder."); return; }
     await load();
   }
 
   async function reviewSuggestion(suggestion: Suggestion, decision: "accept" | "dismiss") {
-    await fetch(`/api/suggestions/${suggestion.id}/review`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ decision }) });
+    setActionError(null);
+    const response = await fetch(`/api/suggestions/${suggestion.id}/review`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ decision }) });
+    if (!response.ok) { const data = await response.json() as { error?: string }; setActionError(data.error ?? "Could not review this suggestion."); return; }
     await load();
   }
 
   async function restoreEnrollment(enrollment: ArchivedEnrollment) {
-    setError(null);
+    setActionError(null);
     const response = await fetch(`/api/enrollments/${enrollment.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "restore" }) });
-    if (!response.ok) { const data = await response.json() as { error?: string }; setError(data.error ?? "Could not restore this class."); return; }
+    if (!response.ok) { const data = await response.json() as { error?: string }; setActionError(data.error ?? "Could not restore this class."); return; }
     await load();
+  }
+
+  async function installApp() {
+    setActionError(null);
+    if (!installPrompt) return;
+    try { await installPrompt.prompt(); await installPrompt.userChoice; setInstallPrompt(null); }
+    catch { setActionError("ClassCue could not open the install prompt. You can still use it in this browser."); }
   }
 
   return (
@@ -311,16 +344,17 @@ export function ClassCueApp({ displayName }: { displayName: string }) {
         <LoadingState />
       ) : (
         <div className="app-content">
+          {actionError && <div className="action-alert" role="alert"><span>{actionError}</span><button onClick={() => setActionError(null)} aria-label="Dismiss message">×</button></div>}
           {tab === "today" && <TodayView snapshot={snapshot} onAddChild={() => setSheet("child")} onAddClass={() => setSheet("enrollment")} onAttendance={openAttendance} onSchedule={setScheduleSession} onPayment={setPaymentCharge} onReminderAction={actOnReminder} />}
           {tab === "children" && <ChildrenView snapshot={snapshot} onAddChild={() => setSheet("child")} onAddClass={() => setSheet("enrollment")} onAttendance={openAttendance} onEditChild={setEditingChild} onManageEnrollment={setManagingEnrollment} />}
           {tab === "fees" && <FeesView snapshot={snapshot} onSetup={() => setFeeSetupOpen(true)} onPayment={setPaymentCharge} onAdjust={setAdjustCharge} onNewCharge={setNewChargeArrangement} />}
-          {tab === "more" && <MoreView snapshot={snapshot} notificationPermission={notificationPermission} onEnableNotifications={enableNotifications} onSetupReminder={() => setReminderSetupOpen(true)} onToggleReminder={toggleReminder} onReminderAction={actOnReminder} onReviewSuggestion={reviewSuggestion} onAddContact={() => setEditingContact("new")} onEditContact={setEditingContact} onHouseholdSettings={() => setHouseholdSettingsOpen(true)} onRestore={restoreEnrollment} />}
+          {tab === "more" && <MoreView snapshot={snapshot} notificationPermission={notificationPermission} onEnableNotifications={enableNotifications} onSetupReminder={() => setReminderSetupOpen(true)} onToggleReminder={toggleReminder} onReminderAction={actOnReminder} onReviewSuggestion={reviewSuggestion} onAddContact={() => setEditingContact("new")} onEditContact={setEditingContact} onHouseholdSettings={() => setHouseholdSettingsOpen(true)} onRestore={restoreEnrollment} installAvailable={Boolean(installPrompt)} isStandalone={isStandalone} isIOS={isIOS} onInstall={installApp} />}
         </div>
       )}
 
       <nav className="bottom-nav" aria-label="Primary navigation">
         {navItems.map((item) => (
-          <button key={item.id} className={tab === item.id ? "active" : ""} onClick={() => setTab(item.id)}>
+          <button key={item.id} className={tab === item.id ? "active" : ""} aria-current={tab === item.id ? "page" : undefined} onClick={() => setTab(item.id)}>
             <span aria-hidden="true">{item.icon}</span>{item.label}
           </button>
         ))}
@@ -469,10 +503,14 @@ function ChildrenView({ snapshot, onAddChild, onAddClass, onAttendance, onEditCh
   );
 }
 
-function MoreView({ snapshot, notificationPermission, onEnableNotifications, onSetupReminder, onToggleReminder, onReminderAction, onReviewSuggestion, onAddContact, onEditContact, onHouseholdSettings, onRestore }: { snapshot: Snapshot; notificationPermission: NotificationPermission | "unsupported"; onEnableNotifications: () => Promise<void>; onSetupReminder: () => void; onToggleReminder: (rule: ReminderRule) => Promise<void>; onReminderAction: (job: ReminderJob, status: "delivered" | "dismissed") => Promise<void>; onReviewSuggestion: (suggestion: Suggestion, decision: "accept" | "dismiss") => Promise<void>; onAddContact: () => void; onEditContact: (contact: Contact) => void; onHouseholdSettings: () => void; onRestore: (enrollment: ArchivedEnrollment) => Promise<void> }) {
+function MoreView({ snapshot, notificationPermission, onEnableNotifications, onSetupReminder, onToggleReminder, onReminderAction, onReviewSuggestion, onAddContact, onEditContact, onHouseholdSettings, onRestore, installAvailable, isStandalone, isIOS, onInstall }: { snapshot: Snapshot; notificationPermission: NotificationPermission | "unsupported"; onEnableNotifications: () => Promise<void>; onSetupReminder: () => void; onToggleReminder: (rule: ReminderRule) => Promise<void>; onReminderAction: (job: ReminderJob, status: "delivered" | "dismissed") => Promise<void>; onReviewSuggestion: (suggestion: Suggestion, decision: "accept" | "dismiss") => Promise<void>; onAddContact: () => void; onEditContact: (contact: Contact) => void; onHouseholdSettings: () => void; onRestore: (enrollment: ArchivedEnrollment) => Promise<void>; installAvailable: boolean; isStandalone: boolean; isIOS: boolean; onInstall: () => Promise<void> }) {
   return (
     <>
       <section className="page-intro"><p className="eyebrow">Reminders and account</p><h1>More</h1><p>Control what ClassCue brings to your attention. Nothing is shared or changed without your action.</p></section>
+      <section className={`install-card ${isStandalone ? "installed" : ""}`}>
+        <div className="install-icon">C</div><div><span>Phone access</span><strong>{isStandalone ? "Installed on this device" : "Keep ClassCue on your home screen"}</strong><p>{isStandalone ? "ClassCue opens like an app from your phone." : isIOS && !installAvailable ? "In Safari, tap Share, then Add to Home Screen." : "Install for faster, full-screen access without finding the browser tab."}</p></div>
+        {installAvailable && !isStandalone && <button className="primary-button" onClick={() => onInstall()}>Install ClassCue</button>}
+      </section>
       <section className={`notification-card ${notificationPermission}`}>
         <div className="notification-icon">◉</div><div><span>Browser notifications</span><strong>{notificationPermission === "granted" ? "Enabled on this device" : notificationPermission === "denied" ? "Blocked in browser settings" : notificationPermission === "unsupported" ? "Not supported on this device" : "Not enabled yet"}</strong><p>ClassCue checks for due reminders while the app is open. Your reminder inbox remains available either way.</p></div>
         {notificationPermission === "default" && <button className="primary-button" onClick={() => onEnableNotifications()}>Enable notifications</button>}
@@ -492,6 +530,9 @@ function MoreView({ snapshot, notificationPermission, onEnableNotifications, onS
       {snapshot.contacts.length === 0 ? <section className="empty-card compact"><h3>No saved contacts</h3><p>Save teachers, administrators, and payment support once, then link them to any class.</p><button className="primary-button" onClick={onAddContact}>Add contact</button></section> : <section className="contact-list">{snapshot.contacts.map((contact) => <button className="contact-card" key={contact.id} onClick={() => onEditContact(contact)}><span className="contact-avatar">{initials(contact.name)}</span><span><strong>{contact.name}</strong><small>{contact.providerName ?? contact.email ?? contact.phone}</small><em>{contact.links.filter((link) => link.enrollmentStatus === "active").length} active {contact.links.filter((link) => link.enrollmentStatus === "active").length === 1 ? "class" : "classes"}</em></span><b>›</b></button>)}</section>}
 
       {snapshot.archivedEnrollments.length > 0 && <><div className="section-heading more-section-heading"><div><p className="eyebrow">History preserved</p><h2>Archived classes</h2></div></div><section className="archive-list">{snapshot.archivedEnrollments.map((enrollment) => <article key={enrollment.id}><div><strong>{enrollment.childName} · {enrollment.name}</strong><small>{enrollment.providerName ?? "Provider not added"} · archived {dateTimeLabel(enrollment.archivedAt)}</small></div><button className="secondary-button" onClick={() => onRestore(enrollment)}>Restore</button></article>)}</section></>}
+
+      <div className="section-heading more-section-heading"><div><p className="eyebrow">Privacy</p><h2>Your family data</h2></div></div>
+      <section className="data-care-card"><strong>Private and parent controlled</strong><p>ClassCue stores your household records under your signed-in account. It does not process payments, message contacts, or share reminders automatically.</p><div><span>✓ Suggestions require acceptance</span><span>✓ Native sharing requires your tap</span><span>✓ Private pages are never cached offline</span></div></section>
 
       <div className="section-heading more-section-heading"><div><p className="eyebrow">Account</p><h2>Household</h2></div></div>
       <section className="settings-card">
@@ -917,7 +958,17 @@ function ScheduleChangeSheet({ session, onClose, onSaved }: { session: ClassSess
 }
 
 function Sheet({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: React.ReactNode }) {
-  return <div className="sheet-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="bottom-sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title"><div className="sheet-handle"></div><header><div><p className="eyebrow">{subtitle}</p><h2 id="sheet-title">{title}</h2></div><button className="close-button" onClick={onClose} aria-label="Close">×</button></header>{children}</section></div>;
+  const dialogRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const dialog = dialogRef.current;
+    const first = dialog?.querySelector<HTMLElement>("input, select, textarea, button, a[href]");
+    first?.focus();
+    const keydown = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    document.addEventListener("keydown", keydown);
+    return () => { document.removeEventListener("keydown", keydown); previous?.focus(); };
+  }, [onClose]);
+  return <div className="sheet-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section ref={dialogRef} className="bottom-sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" aria-describedby="sheet-subtitle"><div className="sheet-handle"></div><header><div><p className="eyebrow" id="sheet-subtitle">{subtitle}</p><h2 id="sheet-title">{title}</h2></div><button className="close-button" onClick={onClose} aria-label={`Close ${title}`}>×</button></header>{children}</section></div>;
 }
 
 function LoadingState() { return <section className="loading-state" role="status" aria-label="Loading ClassCue"><div></div><div></div><div></div></section>; }

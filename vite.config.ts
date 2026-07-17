@@ -16,7 +16,7 @@ const localBindingConfig = {
   compatibility_flags: ["nodejs_compat"],
   triggers: { crons: ["* * * * *"] },
   vars: Object.fromEntries(
-    ["VAPID_PUBLIC_KEY", "VAPID_PRIVATE_KEY", "VAPID_SUBJECT"]
+    ["VAPID_PUBLIC_KEY", "VAPID_PRIVATE_KEY", "VAPID_SUBJECT", "OPENAI_API_KEY", "OPENAI_MODEL"]
       .flatMap((key) => process.env[key] ? [[key, process.env[key]]] : []),
   ),
   d1_databases: d1

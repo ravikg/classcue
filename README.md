@@ -136,8 +136,23 @@ Dates and times use Gulf Standard Time (`Asia/Dubai`, UTC+4).
 
 ### Next stage
 
-- Deploy this notification stage and complete a live-device enable/send/receive acceptance check.
-- Optionally add an OpenAI-powered suggestion adapter once an API credential is configured, while keeping parent review mandatory.
+- Complete a live-device notification enable/send/receive acceptance check.
+
+### 18 July 2026, 1:40 AM GST — Privacy-scoped OpenAI insight adapter completed
+
+- Added an on-demand OpenAI Responses API adapter for fee explanations, attendance and punctuality patterns, and reminder-timing proposals.
+- Used strict JSON Schema Structured Outputs with the current `gpt-5.6-sol` model default, explicit low-latency reasoning, a 30-second timeout, and `store: false`.
+- Limited model input to pseudonymous class and fee aliases plus aggregate facts; child names, class names, contacts, notes, raw attendance history, and payment references are not sent.
+- Revalidated every proposed reminder against current household-owned records before it can become a pending suggestion.
+- Kept both model-generated and rule-based suggestions under explicit parent review; informational insights make no record change, and accepted reminder proposals use the existing validated reminder command.
+- Added a ten-minute household rate limit and an audit event for every model-generation request to control API usage and preserve accountability.
+- Added clear UI labels separating AI-generated insights from the ClassCue rule engine, plus an honest disconnected state until an API key is configured.
+- Verified 13 regression checks, TypeScript, ESLint, and the production build. A live OpenAI call remains pending until `OPENAI_API_KEY` is added as a Sites secret.
+
+### Next stage
+
+- Configure the OpenAI API key, run one live structured-output acceptance call, and deploy the connected AI stage.
+- Complete the live-device notification enable/send/receive acceptance check.
 
 ## Prerequisites
 

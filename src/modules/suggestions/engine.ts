@@ -67,8 +67,8 @@ export async function reviewSuggestion(context: HouseholdContext, suggestionId: 
   }
 
   const action = safeJson(suggestion.proposedActionJson) as ReminderRuleInput & { action?: string };
-  if (action.action !== "save_reminder") throw new ReminderValidationError("This proposed action is no longer supported.", 409);
-  const result = await saveReminderRule(context, action);
+  if (action.action !== "save_reminder" && action.action !== "none") throw new ReminderValidationError("This proposed action is no longer supported.", 409);
+  const result = action.action === "save_reminder" ? await saveReminderRule(context, action) : { reviewed: true };
   await d1.batch([
     d1.prepare("UPDATE suggestions SET status = 'accepted', reviewed_by_user_id = ?, reviewed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(context.userId, suggestion.id),
     d1.prepare("INSERT INTO audit_events (id, household_id, actor_user_id, entity_type, entity_id, action, before_json, after_json) VALUES (?, ?, ?, 'suggestion', ?, 'accept', ?, ?)")

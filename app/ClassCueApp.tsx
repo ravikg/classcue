@@ -188,6 +188,7 @@ type Snapshot = {
   suggestions: Suggestion[];
   contacts: Contact[];
   archivedEnrollments: ArchivedEnrollment[];
+  ai: { configured: boolean; model: string };
 };
 
 type Tab = "today" | "children" | "fees" | "more";
@@ -224,6 +225,7 @@ export function ClassCueApp({ displayName }: { displayName: string }) {
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [isStandalone, setIsStandalone] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
+  const [generatingInsights, setGeneratingInsights] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -341,6 +343,17 @@ export function ClassCueApp({ displayName }: { displayName: string }) {
     await load();
   }
 
+  async function generateAIInsights() {
+    setActionError(null);
+    setGeneratingInsights(true);
+    try {
+      const response = await fetch("/api/suggestions/generate", { method: "POST" });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) { setActionError(data.error ?? "AI insights could not be generated."); return; }
+      await load();
+    } finally { setGeneratingInsights(false); }
+  }
+
   async function restoreEnrollment(enrollment: ArchivedEnrollment) {
     setActionError(null);
     const response = await fetch(`/api/enrollments/${enrollment.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "restore" }) });
@@ -378,7 +391,7 @@ export function ClassCueApp({ displayName }: { displayName: string }) {
           {tab === "today" && <TodayView snapshot={snapshot} onAddChild={() => setSheet("child")} onAddClass={() => setSheet("enrollment")} onAttendance={openAttendance} onSchedule={setScheduleSession} onPayment={setPaymentCharge} onReminderAction={actOnReminder} />}
           {tab === "children" && <ChildrenView snapshot={snapshot} onAddChild={() => setSheet("child")} onAddClass={() => setSheet("enrollment")} onAttendance={openAttendance} onEditChild={setEditingChild} onManageEnrollment={setManagingEnrollment} />}
           {tab === "fees" && <FeesView snapshot={snapshot} onSetup={() => setFeeSetupOpen(true)} onPayment={setPaymentCharge} onAdjust={setAdjustCharge} onNewCharge={setNewChargeArrangement} />}
-          {tab === "more" && <MoreView snapshot={snapshot} notificationPermission={notificationPermission} pushEnabled={pushEnabled} pushConfigured={pushConfigured} onEnableNotifications={enableNotifications} onDisableNotifications={disableNotifications} onSetupReminder={() => setReminderSetupOpen(true)} onToggleReminder={toggleReminder} onReminderAction={actOnReminder} onReviewSuggestion={reviewSuggestion} onAddContact={() => setEditingContact("new")} onEditContact={setEditingContact} onHouseholdSettings={() => setHouseholdSettingsOpen(true)} onRestore={restoreEnrollment} installAvailable={Boolean(installPrompt)} isStandalone={isStandalone} isIOS={isIOS} onInstall={installApp} />}
+          {tab === "more" && <MoreView snapshot={snapshot} notificationPermission={notificationPermission} pushEnabled={pushEnabled} pushConfigured={pushConfigured} onEnableNotifications={enableNotifications} onDisableNotifications={disableNotifications} onSetupReminder={() => setReminderSetupOpen(true)} onToggleReminder={toggleReminder} onReminderAction={actOnReminder} onReviewSuggestion={reviewSuggestion} onGenerateInsights={generateAIInsights} generatingInsights={generatingInsights} onAddContact={() => setEditingContact("new")} onEditContact={setEditingContact} onHouseholdSettings={() => setHouseholdSettingsOpen(true)} onRestore={restoreEnrollment} installAvailable={Boolean(installPrompt)} isStandalone={isStandalone} isIOS={isIOS} onInstall={installApp} />}
         </div>
       )}
 
@@ -533,7 +546,7 @@ function ChildrenView({ snapshot, onAddChild, onAddClass, onAttendance, onEditCh
   );
 }
 
-function MoreView({ snapshot, notificationPermission, pushEnabled, pushConfigured, onEnableNotifications, onDisableNotifications, onSetupReminder, onToggleReminder, onReminderAction, onReviewSuggestion, onAddContact, onEditContact, onHouseholdSettings, onRestore, installAvailable, isStandalone, isIOS, onInstall }: { snapshot: Snapshot; notificationPermission: NotificationPermission | "unsupported"; pushEnabled: boolean; pushConfigured: boolean; onEnableNotifications: () => Promise<void>; onDisableNotifications: () => Promise<void>; onSetupReminder: () => void; onToggleReminder: (rule: ReminderRule) => Promise<void>; onReminderAction: (job: ReminderJob, status: "delivered" | "dismissed") => Promise<void>; onReviewSuggestion: (suggestion: Suggestion, decision: "accept" | "dismiss") => Promise<void>; onAddContact: () => void; onEditContact: (contact: Contact) => void; onHouseholdSettings: () => void; onRestore: (enrollment: ArchivedEnrollment) => Promise<void>; installAvailable: boolean; isStandalone: boolean; isIOS: boolean; onInstall: () => Promise<void> }) {
+function MoreView({ snapshot, notificationPermission, pushEnabled, pushConfigured, onEnableNotifications, onDisableNotifications, onSetupReminder, onToggleReminder, onReminderAction, onReviewSuggestion, onGenerateInsights, generatingInsights, onAddContact, onEditContact, onHouseholdSettings, onRestore, installAvailable, isStandalone, isIOS, onInstall }: { snapshot: Snapshot; notificationPermission: NotificationPermission | "unsupported"; pushEnabled: boolean; pushConfigured: boolean; onEnableNotifications: () => Promise<void>; onDisableNotifications: () => Promise<void>; onSetupReminder: () => void; onToggleReminder: (rule: ReminderRule) => Promise<void>; onReminderAction: (job: ReminderJob, status: "delivered" | "dismissed") => Promise<void>; onReviewSuggestion: (suggestion: Suggestion, decision: "accept" | "dismiss") => Promise<void>; onGenerateInsights: () => Promise<void>; generatingInsights: boolean; onAddContact: () => void; onEditContact: (contact: Contact) => void; onHouseholdSettings: () => void; onRestore: (enrollment: ArchivedEnrollment) => Promise<void>; installAvailable: boolean; isStandalone: boolean; isIOS: boolean; onInstall: () => Promise<void> }) {
   return (
     <>
       <section className="page-intro"><p className="eyebrow">Reminders and account</p><h1>More</h1><p>Control what ClassCue brings to your attention. Nothing is shared or changed without your action.</p></section>
@@ -552,7 +565,9 @@ function MoreView({ snapshot, notificationPermission, pushEnabled, pushConfigure
       {snapshot.reminders.dueJobs.length > 0 && <><div className="section-heading more-section-heading"><div><p className="eyebrow">Inbox</p><h2>Ready now</h2></div></div><section className="reminder-inbox">{snapshot.reminders.dueJobs.map((job) => <ReminderCue key={job.id} job={job} onAction={onReminderAction} />)}</section></>}
       {snapshot.reminders.upcomingJobs.length > 0 && <><div className="section-heading more-section-heading"><div><p className="eyebrow">Scheduled</p><h2>Coming reminders</h2></div></div><section className="upcoming-reminders">{snapshot.reminders.upcomingJobs.slice(0, 6).map((job) => <article key={job.id}><div><strong>{job.title}</strong><p>{job.body}</p></div><time>{dateTimeLabel(job.scheduledFor)}</time></article>)}</section></>}
 
-      {snapshot.suggestions.length > 0 && <><div className="section-heading more-section-heading"><div><p className="eyebrow">Review first</p><h2>ClassCue suggestions</h2></div></div><section className="suggestion-list">{snapshot.suggestions.map((suggestion) => <article className="suggestion-card" key={suggestion.id}><div className="suggestion-label"><span>Data-based suggestion</span><small>Rule engine · not generative AI</small></div><p>{suggestion.explanation}</p><div className="suggestion-actions"><button className="primary-button" onClick={() => onReviewSuggestion(suggestion, "accept")}>Accept suggestion</button><button className="secondary-button" onClick={() => onReviewSuggestion(suggestion, "dismiss")}>Dismiss</button></div></article>)}</section></>}
+      <div className="section-heading more-section-heading"><div><p className="eyebrow">Review first</p><h2>ClassCue insights</h2></div>{snapshot.ai.configured && <button className="text-button" disabled={generatingInsights} onClick={() => onGenerateInsights()}>{generatingInsights ? "Reviewing…" : "Refresh AI insights"}</button>}</div>
+      {!snapshot.ai.configured && <section className="empty-card compact"><h3>AI insights are ready to connect</h3><p>ClassCue’s safe rule-based suggestions still work. Add an OpenAI API key to enable private, model-generated fee and attendance insights.</p></section>}
+      {snapshot.suggestions.length > 0 && <section className="suggestion-list">{snapshot.suggestions.map((suggestion) => { const generated = suggestion.source.startsWith("openai:"); const changesRecord = suggestion.proposedAction.action === "save_reminder"; return <article className="suggestion-card" key={suggestion.id}><div className="suggestion-label"><span>{generated ? "AI-generated insight" : "Data-based suggestion"}</span><small>{generated ? `${suggestion.source.slice(7)} · parent review required` : "ClassCue rule engine"}</small></div>{typeof suggestion.evidence.targetName === "string" && <strong>{suggestion.evidence.targetName}</strong>}<p>{suggestion.explanation}</p>{Array.isArray(suggestion.evidence.evidence) && <ul>{suggestion.evidence.evidence.slice(0, 3).map((item) => <li key={String(item)}>{String(item)}</li>)}</ul>}<div className="suggestion-actions"><button className="primary-button" onClick={() => onReviewSuggestion(suggestion, "accept")}>{changesRecord ? "Review and apply" : "Mark reviewed"}</button><button className="secondary-button" onClick={() => onReviewSuggestion(suggestion, "dismiss")}>Dismiss</button></div></article>; })}</section>}
 
       {snapshot.reminders.deliveryHistory.length > 0 && <><div className="section-heading more-section-heading"><div><p className="eyebrow">History</p><h2>Recent reminders</h2></div></div><section className="delivery-history">{snapshot.reminders.deliveryHistory.slice(0, 6).map((job) => <div key={job.id}><span className={job.status}>{job.status === "delivered" ? "✓" : "×"}</span><div><strong>{job.title}</strong><small>{dateTimeLabel(job.sentAt ?? job.scheduledFor)}</small></div></div>)}</section></>}
 

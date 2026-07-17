@@ -5,6 +5,7 @@ import { generateReminderJobs } from "@/src/modules/reminders/commands";
 import { getReminderSnapshot } from "@/src/modules/reminders/queries";
 import { ensureSuggestions, getSuggestions } from "@/src/modules/suggestions/engine";
 import { getMaintenanceSnapshot } from "@/src/modules/household/maintenance";
+import { env } from "cloudflare:workers";
 
 export async function GET() {
   try {
@@ -19,6 +20,7 @@ export async function GET() {
       fees: await getFeesSnapshot(context, snapshot.household.today),
       reminders: await getReminderSnapshot(context),
       suggestions: await getSuggestions(context),
+      ai: { configured: Boolean(env.OPENAI_API_KEY), model: env.OPENAI_MODEL ?? "gpt-5.6-sol" },
       contacts: maintenance.contacts,
       archivedEnrollments: maintenance.archivedEnrollments,
     });

@@ -136,9 +136,33 @@ test("suggestions require explicit parent review and use the normal reminder com
   assert.match(engine, /saveReminderRule\(context, action\)/);
   assert.match(engine, /INSERT INTO audit_events/);
   assert.match(reviewRoute, /decision !== "accept" && body\.decision !== "dismiss"/);
-  assert.match(ui, /Rule engine · not generative AI/);
+  assert.match(ui, /ClassCue rule engine/);
   assert.match(ui, /Saving creates or updates this one rule/);
   assert.match(ui, /ClassCue can notify this device when the app is closed/);
+});
+
+test("AI insights use pseudonymous structured output and remain parent controlled", async () => {
+  const [adapter, route, engine, bootstrap, ui] = await Promise.all([
+    readFile(new URL("src/modules/suggestions/openai-adapter.ts", root), "utf8"),
+    readFile(new URL("app/api/suggestions/generate/route.ts", root), "utf8"),
+    readFile(new URL("src/modules/suggestions/engine.ts", root), "utf8"),
+    readFile(new URL("app/api/bootstrap/route.ts", root), "utf8"),
+    readFile(new URL("app/ClassCueApp.tsx", root), "utf8"),
+  ]);
+
+  assert.match(adapter, /https:\/\/api\.openai\.com\/v1\/responses/);
+  assert.match(adapter, /store: false/);
+  assert.match(adapter, /type: "json_schema"/);
+  assert.match(adapter, /strict: true/);
+  assert.match(adapter, /pseudonymous_aggregates/);
+  assert.doesNotMatch(adapter, /contacts\.name|teacherPhone|attendance\.note/);
+  assert.match(adapter, /action !== "save_reminder"/);
+  assert.match(adapter, /'-10 minutes'/);
+  assert.match(route, /requireApiContext/);
+  assert.match(engine, /action\.action === "save_reminder" \? await saveReminderRule/);
+  assert.match(bootstrap, /configured: Boolean\(env\.OPENAI_API_KEY\)/);
+  assert.match(ui, /AI-generated insight/);
+  assert.match(ui, /parent review required/);
 });
 
 test("closed-app push is household scoped, scheduled, and retryable", async () => {

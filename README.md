@@ -6,7 +6,7 @@ The repository uses [vinext](https://github.com/cloudflare/vinext), with Cloudfl
 
 ## Current Status
 
-The product foundation, recurring-class flow, and attendance stage are complete. A signed-in parent can create a household, add children and recurring classes, see generated sessions, record or edit on-time, late, and absent attendance, and review child-level attendance and lateness summaries.
+The product foundation, recurring-class flow, attendance, and schedule-exception stages are complete. A signed-in parent can create a household, add children and recurring classes, record attendance and lateness, cancel or reschedule one session, link makeups, and explicitly change this-and-future recurrence without rewriting history.
 
 ## Product Documentation
 
@@ -64,11 +64,22 @@ Dates and times use Gulf Standard Time (`Asia/Dubai`, UTC+4).
 - Expanded the household snapshot to include up to 90 days of recent sessions for missed attendance entry.
 - Verified the production build, type checks, contract tests, and authenticated late-to-absent end-to-end flow.
 
+### 18 July 2026, 12:06 AM GST — Schedule exceptions and linked makeups completed
+
+- Added explicit “This session only” and “This and future sessions” choices to prevent accidental recurrence changes.
+- Added cancellation, holiday, and reschedule states while preserving the original session and its reason.
+- Added manual replacement and makeup sessions linked to their source session, including per-session location overrides.
+- Added pending compensation tracking and child-level makeup balances for cancelled sessions whose makeup date is not known yet.
+- Added versioned recurrence changes that close the previous rule, retain history and manual exceptions, and regenerate only eligible future recurring sessions.
+- Kept attendance independent and blocked schedule edits once attendance exists.
+- Added safe runtime migrations for existing D1 databases plus regression coverage for history, links, and recurrence boundaries.
+- Verified the production build, TypeScript, contract tests, and authenticated end-to-end cancellation, makeup, reschedule, and future-recurrence flows.
+
 ### Next stage
 
-- Add single-session cancellation, rescheduling, holiday exceptions, and linked makeup sessions.
-- Preserve the original session and keep future recurrence unchanged unless the parent explicitly selects it.
-- Add change previews and makeup-balance visibility before beginning fees.
+- Add the fees and payments domain with monthly, term, package, and per-session charging patterns.
+- Track due and paid amounts, currencies, payment methods, adjustments, and optional receipts.
+- Surface fee reminders and child-level due summaries without coupling payments to attendance.
 
 ## Prerequisites
 

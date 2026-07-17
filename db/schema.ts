@@ -181,9 +181,12 @@ export const sessions = sqliteTable(
     plannedStartAt: text("planned_start_at").notNull(),
     plannedEndAt: text("planned_end_at").notNull(),
     timezone: text("timezone").notNull(),
+    locationOverride: text("location_override"),
+    onlineUrlOverride: text("online_url_override"),
     status: text("status").notNull().default("scheduled"),
     source: text("source").notNull().default("recurrence"),
     reason: text("reason"),
+    compensationStatus: text("compensation_status"),
     version: integer("version").notNull().default(1),
     ...timestamps,
   },
@@ -191,6 +194,30 @@ export const sessions = sqliteTable(
     uniqueIndex("sessions_rule_date_uidx").on(table.scheduleRuleId, table.localDate),
     index("sessions_enrollment_start_idx").on(table.enrollmentId, table.plannedStartAt),
     index("sessions_start_status_idx").on(table.plannedStartAt, table.status),
+  ],
+);
+
+export const sessionLinks = sqliteTable(
+  "session_links",
+  {
+    id: text("id").primaryKey(),
+    sourceSessionId: text("source_session_id")
+      .notNull()
+      .references(() => sessions.id, { onDelete: "cascade" }),
+    targetSessionId: text("target_session_id")
+      .notNull()
+      .references(() => sessions.id, { onDelete: "cascade" }),
+    linkType: text("link_type").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("session_links_pair_type_uidx").on(
+      table.sourceSessionId,
+      table.targetSessionId,
+      table.linkType,
+    ),
+    index("session_links_source_idx").on(table.sourceSessionId),
+    index("session_links_target_idx").on(table.targetSessionId),
   ],
 );
 

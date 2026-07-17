@@ -56,3 +56,26 @@ test("attendance keeps schedule, presence, and punctuality separate", async () =
   assert.match(ui, /Schedule stays separate/);
   assert.match(ui, /Save .*minutes late/);
 });
+
+test("schedule exceptions preserve history and link replacements", async () => {
+  const [linksMigration, locationMigration, sessionChange, recurrenceChange, ui] = await Promise.all([
+    readFile(new URL("drizzle/0001_tiresome_marten_broadcloak.sql", root), "utf8"),
+    readFile(new URL("drizzle/0002_oval_cable.sql", root), "utf8"),
+    readFile(new URL("src/modules/scheduling/change-session.ts", root), "utf8"),
+    readFile(new URL("src/modules/scheduling/change-recurrence.ts", root), "utf8"),
+    readFile(new URL("app/ClassCueApp.tsx", root), "utf8"),
+  ]);
+
+  assert.match(linksMigration, /CREATE TABLE `session_links`/);
+  assert.match(linksMigration, /compensation_status/);
+  assert.match(locationMigration, /location_override/);
+  assert.match(sessionChange, /attendanceSessionId/);
+  assert.match(sessionChange, /originalStatus/);
+  assert.match(sessionChange, /INSERT INTO session_links/);
+  assert.match(recurrenceChange, /superseded_at = CURRENT_TIMESTAMP/);
+  assert.match(recurrenceChange, /source = 'recurrence'/);
+  assert.match(recurrenceChange, /NOT EXISTS \(SELECT 1 FROM attendance_records/);
+  assert.match(ui, /This session only/);
+  assert.match(ui, /This and future sessions/);
+  assert.match(ui, /Makeup still owed/);
+});

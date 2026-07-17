@@ -1,10 +1,11 @@
-import { and, asc, desc, eq, gte, isNull, lte } from "drizzle-orm";
-import { getDb } from "@/db";
+import { and, asc, desc, eq, gte, isNull, lte, sql } from "drizzle-orm";
+import { getD1, getDb } from "@/db";
 import {
   attendanceRecords,
   children,
   enrollments,
   providers,
+  scheduleRules,
   sessions,
 } from "@/db/schema";
 import { localDateInZone } from "@/src/shared/dates";
@@ -51,12 +52,18 @@ export async function getClassCueSnapshot(context: HouseholdContext) {
       enrollmentName: enrollments.displayName,
       subject: enrollments.subject,
       providerName: providers.name,
-      location: enrollments.location,
+      location: sql<string | null>`coalesce(${sessions.locationOverride}, ${enrollments.location})`,
       localDate: sessions.localDate,
       plannedStartAt: sessions.plannedStartAt,
       plannedEndAt: sessions.plannedEndAt,
       timezone: sessions.timezone,
       status: sessions.status,
+      source: sessions.source,
+      reason: sessions.reason,
+      compensationStatus: sessions.compensationStatus,
+      scheduleWeekday: scheduleRules.weekday,
+      scheduleStartTime: scheduleRules.localStartTime,
+      scheduleDurationMinutes: scheduleRules.durationMinutes,
       attendanceStatus: attendanceRecords.attendanceStatus,
       punctuality: attendanceRecords.punctuality,
       minutesLate: attendanceRecords.minutesLate,
@@ -66,6 +73,7 @@ export async function getClassCueSnapshot(context: HouseholdContext) {
     .innerJoin(enrollments, eq(sessions.enrollmentId, enrollments.id))
     .innerJoin(children, eq(enrollments.childId, children.id))
     .leftJoin(providers, eq(enrollments.providerId, providers.id))
+    .leftJoin(scheduleRules, eq(sessions.scheduleRuleId, scheduleRules.id))
     .leftJoin(attendanceRecords, eq(sessions.id, attendanceRecords.sessionId))
     .where(
       and(
@@ -75,6 +83,26 @@ export async function getClassCueSnapshot(context: HouseholdContext) {
       ),
     )
     .orderBy(asc(sessions.plannedStartAt));
+
+  const linkResult = await getD1().prepare(
+    "SELECT links.source_session_id AS sourceSessionId, links.target_session_id AS targetSessionId, links.link_type AS linkType, target.local_date AS targetLocalDate FROM session_links links INNER JOIN sessions source ON source.id = links.source_session_id INNER JOIN sessions target ON target.id = links.target_session_id INNER JOIN enrollments ON enrollments.id = source.enrollment_id WHERE enrollments.household_id = ? AND source.planned_start_at >= ? AND source.planned_start_at <= ?",
+  ).bind(context.householdId, rangeStart, rangeEnd).all<{
+    sourceSessionId: string;
+    targetSessionId: string;
+    linkType: string;
+    targetLocalDate: string;
+  }>();
+  const links = linkResult.results;
+
+  const compensationRows = await db
+    .select({ childId: children.id })
+    .from(sessions)
+    .innerJoin(enrollments, eq(sessions.enrollmentId, enrollments.id))
+    .innerJoin(children, eq(enrollments.childId, children.id))
+    .where(and(
+      eq(enrollments.householdId, context.householdId),
+      eq(sessions.compensationStatus, "pending"),
+    ));
 
   const attendanceRows = await db
     .select({
@@ -98,12 +126,27 @@ export async function getClassCueSnapshot(context: HouseholdContext) {
     .where(eq(enrollments.householdId, context.householdId))
     .orderBy(desc(sessions.plannedStartAt));
 
-  const sessionResults = sessionRows.map((session) => ({
-    ...session,
-    canRecordAttendance:
-      (session.status === "scheduled" || session.status === "makeup") &&
-      new Date(session.plannedStartAt).getTime() <= now.getTime(),
-  }));
+  const sessionResults = sessionRows.map((session) => {
+    const link = links.find((candidate) => candidate.sourceSessionId === session.id);
+    return {
+      ...session,
+      linkedSessionId: link?.targetSessionId ?? null,
+      linkedSessionLocalDate: link?.targetLocalDate ?? null,
+      linkType: link?.linkType ?? null,
+      canRecordAttendance:
+        (session.status === "scheduled" || session.status === "makeup") &&
+        new Date(session.plannedStartAt).getTime() <= now.getTime(),
+      canManageSchedule:
+        !session.attendanceStatus &&
+        (session.status === "scheduled" || session.status === "makeup" ||
+          (session.status === "cancelled" && session.compensationStatus === "pending")),
+      canChangeFutureRecurrence:
+        session.source === "recurrence" &&
+        session.status === "scheduled" &&
+        !session.attendanceStatus &&
+        new Date(session.plannedStartAt).getTime() > now.getTime(),
+    };
+  });
 
   return {
     user: { displayName: context.displayName },
@@ -130,6 +173,7 @@ export async function getClassCueSnapshot(context: HouseholdContext) {
           averageMinutesLate: lateRows.length > 0 ? Math.round(totalLateMinutes / lateRows.length) : null,
         },
         recentAttendance: childAttendance.slice(0, 5),
+        makeupBalance: compensationRows.filter((row) => row.childId === child.id).length,
         recentSessions: sessionResults
           .filter(
             (session) =>

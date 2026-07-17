@@ -80,6 +80,7 @@ button { color: inherit; }
 .session-list, .children-list { display: grid; gap: 13px; }
 .session-card { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; padding: 18px; border: 1px solid var(--line); border-radius: 22px; background: var(--white); box-shadow: 0 6px 20px rgba(18, 53, 45, .035); }
 .session-card.recorded { border-color: #c6e6dc; background: linear-gradient(110deg, var(--white), #f4fbf8); }
+.session-card.changed { background: linear-gradient(110deg, var(--white), #faf8f1); }
 .child-dot { width: 43px; height: 43px; border-radius: 15px; display: grid; place-items: center; font-weight: 900; }
 .child-dot.large { width: 54px; height: 54px; border-radius: 18px; font-size: 20px; }
 .child-dot.blue, .color-picker .blue { background: var(--blue-soft); color: var(--blue); }
@@ -94,8 +95,14 @@ button { color: inherit; }
 .status-pill.on-time { background: var(--green-soft); color: var(--green); }
 .status-pill.late { background: var(--gold-soft); color: #8a6210; }
 .status-pill.absent { background: var(--coral-soft); color: #b5412a; }
+.status-pill.holiday { background: #eee9fa; color: #655092; }
+.status-pill.makeup { background: var(--blue-soft); color: var(--blue); }
+.change-note { font-style: italic; }
+.balance-note { color: #8a6210 !important; font-weight: 800; }
+.session-actions { display: grid; justify-items: stretch; gap: 6px; }
 .attendance-action { border: 0; border-radius: 12px; min-height: 39px; padding: 0 13px; background: var(--blue); color: white; font-size: 11px; font-weight: 850; cursor: pointer; }
 .attendance-action.edit { background: #e9f1ed; color: var(--green); }
+.manage-action { border: 1px solid #cbd7d1; border-radius: 11px; min-height: 34px; padding: 0 11px; background: white; color: var(--ink); font-size: 10px; font-weight: 850; cursor: pointer; }
 .future-cue { font-size: 10px; font-weight: 800; color: var(--ink-soft); padding: 8px 9px; border-radius: 10px; background: #f0f3f1; }
 
 .empty-card, .coming-card, .settings-card { border: 1px dashed #cbd7d1; background: rgba(255,255,255,.54); border-radius: 24px; padding: 30px; text-align: center; }
@@ -113,6 +120,9 @@ button { color: inherit; }
 .attendance-stats strong { display: block; font-size: 19px; letter-spacing: -.035em; }
 .attendance-stats span { display: block; color: var(--ink-soft); font-size: 9px; line-height: 1.2; margin-top: 2px; }
 .attendance-history { border-top: 1px solid var(--line); margin: 4px 0 18px; padding-top: 16px; }
+.makeup-balance { display: flex; flex-direction: column; gap: 2px; padding: 13px 15px; margin: -3px 0 18px; border-radius: 14px; background: var(--gold-soft); color: #75520d; }
+.makeup-balance strong { font-size: 13px; }
+.makeup-balance span { font-size: 10px; }
 .mini-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
 .mini-heading strong { font-size: 12px; }
 .mini-heading span { color: var(--ink-soft); font-size: 10px; }
@@ -189,6 +199,16 @@ button { color: inherit; }
 .separation-note { padding: 14px; border-radius: 15px; background: var(--ink); color: white; }
 .separation-note strong { font-size: 12px; }
 .separation-note p { margin: 4px 0 0; color: #c2d3cd; font-size: 11px; line-height: 1.45; }
+.scope-options { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 9px; }
+.scope-options button { display: flex; flex-direction: column; gap: 3px; padding: 14px; border: 1px solid var(--line); border-radius: 15px; background: #fafbf9; color: var(--ink); text-align: left; cursor: pointer; }
+.scope-options button.selected { border: 2px solid var(--blue); background: var(--blue-soft); color: #275fbd; }
+.scope-options small { color: var(--ink-soft); font-size: 9px; }
+.replacement-panel, .future-preview { padding: 16px; border-radius: 17px; background: #f0f4f1; }
+.replacement-panel > strong, .future-preview strong { display: block; margin-bottom: 12px; font-size: 13px; }
+.replacement-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.future-preview { background: var(--blue-soft); color: #275fbd; }
+.future-preview strong { margin-bottom: 4px; }
+.future-preview p { margin: 0; color: #4f6f9f; font-size: 11px; line-height: 1.45; }
 .muted { color: var(--ink-soft); line-height: 1.5; }
 .error-panel { margin: 40px 24px; padding: 22px; border-radius: 20px; background: var(--coral-soft); }
 .error-panel p { color: #8c4c3f; }
@@ -208,10 +228,12 @@ button { color: inherit; }
   .app-content { padding: 25px 17px 42px; }
   .session-card { grid-template-columns: auto 1fr; }
   .round-action { display: none; }
-  .attendance-action, .future-cue { grid-column: 2; width: fit-content; }
+  .session-actions { grid-column: 2; width: fit-content; }
   .sheet-form.two-column { grid-template-columns: 1fr; }
   .span-two { grid-column: auto; }
   .bottom-sheet { padding-inline: 18px; }
+  .scope-options, .replacement-grid { grid-template-columns: 1fr; }
+  .replacement-grid .span-two { grid-column: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {

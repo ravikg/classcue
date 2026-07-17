@@ -79,3 +79,28 @@ test("schedule exceptions preserve history and link replacements", async () => {
   assert.match(ui, /This and future sessions/);
   assert.match(ui, /Makeup still owed/);
 });
+
+test("fees keep suggestions, parent adjustments, currencies, and payments auditable", async () => {
+  const [migration, commands, paymentRoute, query, attendanceRoute, ui] = await Promise.all([
+    readFile(new URL("drizzle/0003_cute_guardian.sql", root), "utf8"),
+    readFile(new URL("src/modules/fees/commands.ts", root), "utf8"),
+    readFile(new URL("app/api/fee-charges/[chargeId]/payments/route.ts", root), "utf8"),
+    readFile(new URL("src/modules/fees/queries.ts", root), "utf8"),
+    readFile(new URL("app/api/sessions/[sessionId]/attendance/route.ts", root), "utf8"),
+    readFile(new URL("app/ClassCueApp.tsx", root), "utf8"),
+  ]);
+
+  for (const table of ["fee_arrangements", "fee_charges", "fee_adjustments", "payments", "session_credit_entries"]) {
+    assert.match(migration, new RegExp("CREATE TABLE `" + table + "`"));
+  }
+  assert.match(commands, /new Set\(\["monthly", "term", "package", "per_session"\]\)/);
+  assert.match(commands, /previous paid amount/);
+  assert.match(commands, /Explain why the confirmed amount differs/);
+  assert.match(paymentRoute, /Payment cannot exceed the outstanding amount/);
+  assert.match(paymentRoute, /INSERT OR IGNORE INTO session_credit_entries/);
+  assert.match(query, /dueAmountMinor/);
+  assert.match(query, /paidAmountMinor/);
+  assert.match(attendanceRoute, /'use', -1/);
+  assert.match(ui, /How ClassCue calculated it/);
+  assert.match(ui, /Partial payments are supported/);
+});

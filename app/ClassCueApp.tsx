@@ -29,6 +29,67 @@ type Child = {
   makeupBalance: number;
 };
 
+type FeePayment = {
+  id: string;
+  amountMinor: number;
+  currency: string;
+  paidAt: string;
+  method: string;
+  reference: string | null;
+  note: string | null;
+};
+
+type FeeCharge = {
+  id: string;
+  arrangementId: string;
+  enrollmentId: string;
+  enrollmentName: string;
+  childId: string;
+  childName: string;
+  childColor: string;
+  providerName: string | null;
+  model: string;
+  periodStart: string;
+  periodEnd: string;
+  dueDate: string;
+  suggestedAmountMinor: number;
+  confirmedAmountMinor: number;
+  paidAmountMinor: number;
+  outstandingAmountMinor: number;
+  currency: string;
+  status: string;
+  displayStatus: string;
+  calculation: { basis?: string; explanation?: string; sessionCount?: number; sessionsIncluded?: number | null; previousPaidAmountMinor?: number | null };
+  payments: FeePayment[];
+  adjustments: { id: string; amountMinor: number; reason: string; createdAt: string }[];
+};
+
+type FeeArrangement = {
+  id: string;
+  enrollmentId: string;
+  enrollmentName: string;
+  childId: string;
+  childName: string;
+  model: string;
+  currency: string;
+  baseAmountMinor: number;
+  sessionsIncluded: number | null;
+  compensationPolicy: string;
+  purchasedSessions: number;
+  usedSessions: number;
+  compensatedSessions: number;
+  sessionBalance: number;
+};
+
+type FeesSnapshot = {
+  arrangements: FeeArrangement[];
+  charges: FeeCharge[];
+  dueCharges: FeeCharge[];
+  paidCharges: FeeCharge[];
+  totals: { currency: string; dueAmountMinor: number; paidAmountMinor: number }[];
+  childSummaries: { childId: string; currency: string; dueAmountMinor: number; paidAmountMinor: number }[];
+};
+
 type AttendanceHistory = {
   sessionId: string;
   enrollmentName: string;
@@ -79,6 +140,7 @@ type Snapshot = {
   household: { timezone: string; today: string };
   children: Child[];
   upcomingSessions: ClassSession[];
+  fees: FeesSnapshot;
 };
 
 type Tab = "today" | "children" | "fees" | "more";
@@ -97,6 +159,10 @@ export function ClassCueApp({ displayName }: { displayName: string }) {
   const [sheet, setSheet] = useState<Sheet>(null);
   const [attendanceSession, setAttendanceSession] = useState<ClassSession | null>(null);
   const [scheduleSession, setScheduleSession] = useState<ClassSession | null>(null);
+  const [feeSetupOpen, setFeeSetupOpen] = useState(false);
+  const [paymentCharge, setPaymentCharge] = useState<FeeCharge | null>(null);
+  const [adjustCharge, setAdjustCharge] = useState<FeeCharge | null>(null);
+  const [newChargeArrangement, setNewChargeArrangement] = useState<FeeArrangement | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -121,6 +187,10 @@ export function ClassCueApp({ displayName }: { displayName: string }) {
     setSheet(null);
     setAttendanceSession(null);
     setScheduleSession(null);
+    setFeeSetupOpen(false);
+    setPaymentCharge(null);
+    setAdjustCharge(null);
+    setNewChargeArrangement(null);
   };
 
   const openAttendance = (session: ClassSession) => setAttendanceSession(session);
@@ -144,9 +214,9 @@ export function ClassCueApp({ displayName }: { displayName: string }) {
         <LoadingState />
       ) : (
         <div className="app-content">
-          {tab === "today" && <TodayView snapshot={snapshot} onAddChild={() => setSheet("child")} onAddClass={() => setSheet("enrollment")} onAttendance={openAttendance} onSchedule={setScheduleSession} />}
+          {tab === "today" && <TodayView snapshot={snapshot} onAddChild={() => setSheet("child")} onAddClass={() => setSheet("enrollment")} onAttendance={openAttendance} onSchedule={setScheduleSession} onPayment={setPaymentCharge} />}
           {tab === "children" && <ChildrenView snapshot={snapshot} onAddChild={() => setSheet("child")} onAddClass={() => setSheet("enrollment")} onAttendance={openAttendance} />}
-          {tab === "fees" && <ComingSoon title="Fees are the next domain" body="The data model is ready for mixed currencies, monthly fees, terms, packages, adjustments, and parent-confirmed payments." />}
+          {tab === "fees" && <FeesView snapshot={snapshot} onSetup={() => setFeeSetupOpen(true)} onPayment={setPaymentCharge} onAdjust={setAdjustCharge} onNewCharge={setNewChargeArrangement} />}
           {tab === "more" && <MoreView snapshot={snapshot} />}
         </div>
       )}
@@ -163,23 +233,28 @@ export function ClassCueApp({ displayName }: { displayName: string }) {
       {sheet === "enrollment" && snapshot && <EnrollmentSheet familyChildren={snapshot.children} onClose={() => setSheet(null)} onSaved={refresh} />}
       {attendanceSession && <AttendanceSheet session={attendanceSession} onClose={() => setAttendanceSession(null)} onSaved={refresh} />}
       {scheduleSession && <ScheduleChangeSheet session={scheduleSession} onClose={() => setScheduleSession(null)} onSaved={refresh} />}
+      {feeSetupOpen && snapshot && <FeeSetupSheet snapshot={snapshot} onClose={() => setFeeSetupOpen(false)} onSaved={refresh} />}
+      {paymentCharge && <PaymentSheet charge={paymentCharge} today={snapshot?.household.today ?? ""} onClose={() => setPaymentCharge(null)} onSaved={refresh} />}
+      {adjustCharge && <FeeAdjustmentSheet charge={adjustCharge} onClose={() => setAdjustCharge(null)} onSaved={refresh} />}
+      {newChargeArrangement && snapshot && <NewChargeSheet arrangement={newChargeArrangement} today={snapshot.household.today} onClose={() => setNewChargeArrangement(null)} onSaved={refresh} />}
     </main>
   );
 }
 
-function TodayView({ snapshot, onAddChild, onAddClass, onAttendance, onSchedule }: { snapshot: Snapshot; onAddChild: () => void; onAddClass: () => void; onAttendance: (session: ClassSession) => void; onSchedule: (session: ClassSession) => void }) {
+function TodayView({ snapshot, onAddChild, onAddClass, onAttendance, onSchedule, onPayment }: { snapshot: Snapshot; onAddChild: () => void; onAddClass: () => void; onAttendance: (session: ClassSession) => void; onSchedule: (session: ClassSession) => void; onPayment: (charge: FeeCharge) => void }) {
   const todaySessions = snapshot.upcomingSessions.filter((session) => session.localDate === snapshot.household.today);
   const nextSessions = snapshot.upcomingSessions.filter((session) => session.localDate >= snapshot.household.today).slice(0, 4);
   const attendanceDue = todaySessions.filter((session) => session.canRecordAttendance && !session.attendanceStatus).length;
   const firstName = snapshot.user.displayName.split(/\s|@/)[0];
   const displaySessions = todaySessions.length > 0 ? todaySessions : nextSessions;
+  const urgentFees = snapshot.fees.dueCharges.filter((charge) => charge.dueDate <= snapshot.household.today);
 
   return (
     <>
       <section className="page-intro">
         <p className="eyebrow">{longDate(snapshot.household.today)}</p>
         <h1>{snapshot.children.length === 0 ? `Welcome, ${firstName}` : `Good ${dayPart()}, ${firstName}`}</h1>
-        <p>{snapshot.children.length === 0 ? "Let’s put the first class on your family’s cue." : attendanceDue > 0 ? `${attendanceDue} ${attendanceDue === 1 ? "class needs" : "classes need"} attendance now.` : todaySessions.length > 0 ? `${todaySessions.length} ${todaySessions.length === 1 ? "class is" : "classes are"} on today’s schedule.` : "Nothing urgent today. Here’s what is coming next."}</p>
+        <p>{snapshot.children.length === 0 ? "Let’s put the first class on your family’s cue." : attendanceDue > 0 ? `${attendanceDue} ${attendanceDue === 1 ? "class needs" : "classes need"} attendance now.` : urgentFees.length > 0 ? `${urgentFees.length} ${urgentFees.length === 1 ? "fee needs" : "fees need"} attention.` : todaySessions.length > 0 ? `${todaySessions.length} ${todaySessions.length === 1 ? "class is" : "classes are"} on today’s schedule.` : "Nothing urgent today. Here’s what is coming next."}</p>
       </section>
 
       {snapshot.children.length === 0 ? (
@@ -199,6 +274,13 @@ function TodayView({ snapshot, onAddChild, onAddClass, onAttendance, onSchedule 
             <div><strong>{snapshot.children.length}</strong><span>Children</span></div>
             <div><strong>{snapshot.children.reduce((sum, child) => sum + child.enrollments.length, 0)}</strong><span>Classes</span></div>
           </section>
+
+          {snapshot.fees.dueCharges.length > 0 && (
+            <section className="today-fees">
+              <div className="section-heading"><div><p className="eyebrow">Fees to watch</p><h2>Due and overdue</h2></div></div>
+              {snapshot.fees.dueCharges.slice(0, 2).map((charge) => <FeeCue key={charge.id} charge={charge} onPayment={onPayment} />)}
+            </section>
+          )}
 
           <div className="section-heading">
             <div><p className="eyebrow">{todaySessions.length > 0 ? "Today’s cue" : "Coming up"}</p><h2>{todaySessions.length > 0 ? "Classes by child" : "The next classes"}</h2></div>
@@ -259,6 +341,9 @@ function ChildrenView({ snapshot, onAddChild, onAddClass, onAttendance }: { snap
                 <div><strong>{child.attendanceSummary.lateArrivals}</strong><span>Late arrivals</span></div>
                 <div><strong>{child.attendanceSummary.averageMinutesLate === null ? "—" : `${child.attendanceSummary.averageMinutesLate}m`}</strong><span>Average late</span></div>
               </div>
+              {snapshot.fees.childSummaries.filter((summary) => summary.childId === child.id).map((summary) => (
+                <div className="child-fee-summary" key={summary.currency}><span>{summary.currency} fees</span><strong>{formatMoney(summary.dueAmountMinor, summary.currency)} due · {formatMoney(summary.paidAmountMinor, summary.currency)} paid</strong></div>
+              ))}
               {child.makeupBalance > 0 && <div className="makeup-balance"><strong>{child.makeupBalance} {child.makeupBalance === 1 ? "makeup" : "makeups"} owed</strong><span>Cancelled sessions awaiting compensation</span></div>}
               {child.recentSessions.length > 0 && (
                 <div className="attendance-history">
@@ -294,8 +379,59 @@ function MoreView({ snapshot }: { snapshot: Snapshot }) {
   );
 }
 
-function ComingSoon({ title, body }: { title: string; body: string }) {
-  return <><section className="page-intro"><p className="eyebrow">Planned stage</p><h1>Fees</h1></section><section className="coming-card"><span className="coming-icon">¤</span><h2>{title}</h2><p>{body}</p><div className="roadmap-line"><span className="done"></span><span className="done"></span><span></span><span></span></div><small>Foundation and scheduling are underway</small></section></>;
+function FeesView({ snapshot, onSetup, onPayment, onAdjust, onNewCharge }: { snapshot: Snapshot; onSetup: () => void; onPayment: (charge: FeeCharge) => void; onAdjust: (charge: FeeCharge) => void; onNewCharge: (arrangement: FeeArrangement) => void }) {
+  const availableEnrollments = snapshot.children.flatMap((child) => child.enrollments).filter((enrollment) => !snapshot.fees.arrangements.some((arrangement) => arrangement.enrollmentId === enrollment.id));
+  return (
+    <>
+      <div className="section-heading page-heading"><div><p className="eyebrow">Money, clearly explained</p><h1>Fees</h1></div>{availableEnrollments.length > 0 && <button className="text-button" onClick={onSetup}>+ Add fee</button>}</div>
+      {snapshot.children.flatMap((child) => child.enrollments).length === 0 ? (
+        <section className="empty-card"><h3>Add a class first</h3><p>A fee arrangement belongs to one child’s class.</p></section>
+      ) : snapshot.fees.arrangements.length === 0 ? (
+        <section className="onboarding-card fee-onboarding"><div className="onboarding-number">03</div><div><p className="eyebrow">Set up the first fee</p><h2>Know what is due—and why.</h2><p>Choose monthly, term, package, or per-session fees. ClassCue keeps currencies separate and preserves every adjustment.</p></div><button className="primary-button" onClick={onSetup}>Add fee arrangement</button></section>
+      ) : (
+        <>
+          <section className="fee-total-grid" aria-label="Fee totals by currency">
+            {snapshot.fees.totals.map((total) => <div key={total.currency}><span>{total.currency}</span><strong>{formatMoney(total.dueAmountMinor, total.currency)}</strong><small>due</small><p>{formatMoney(total.paidAmountMinor, total.currency)} paid</p></div>)}
+            {snapshot.fees.totals.length === 0 && <div><span>Ready</span><strong>—</strong><small>No charges yet</small></div>}
+          </section>
+
+          <div className="section-heading fee-section-heading"><div><p className="eyebrow">Action needed</p><h2>Due and overdue</h2></div></div>
+          {snapshot.fees.dueCharges.length === 0 ? <section className="settled-card"><span>✓</span><div><strong>Nothing due</strong><p>All recorded fees are settled.</p></div></section> : <section className="fee-list">{snapshot.fees.dueCharges.map((charge) => <FeeCard key={charge.id} charge={charge} onPayment={onPayment} onAdjust={onAdjust} />)}</section>}
+
+          <div className="section-heading fee-section-heading"><div><p className="eyebrow">Class arrangements</p><h2>How each class is billed</h2></div></div>
+          <section className="arrangement-list">
+            {snapshot.fees.arrangements.map((arrangement) => (
+              <article className="arrangement-card" key={arrangement.id}>
+                <div><span>{arrangement.childName}</span><h3>{arrangement.enrollmentName}</h3><p>{feeModelLabel(arrangement.model)} · {formatMoney(arrangement.baseAmountMinor, arrangement.currency)}{arrangement.model === "per_session" ? " per session" : ""}</p></div>
+                {arrangement.model === "package" && <div className={`credit-balance ${arrangement.sessionBalance <= 1 ? "low" : ""}`}><strong>{arrangement.sessionBalance}</strong><span>sessions left</span><small>{arrangement.purchasedSessions} bought · {arrangement.usedSessions} used</small></div>}
+                <button className="manage-action" onClick={() => onNewCharge(arrangement)}>Add next fee</button>
+              </article>
+            ))}
+          </section>
+
+          {snapshot.fees.paidCharges.length > 0 && <><div className="section-heading fee-section-heading"><div><p className="eyebrow">History</p><h2>Recently paid</h2></div></div><section className="fee-list paid-list">{snapshot.fees.paidCharges.slice(0, 6).map((charge) => <FeeCard key={charge.id} charge={charge} onPayment={onPayment} onAdjust={onAdjust} />)}</section></>}
+        </>
+      )}
+    </>
+  );
+}
+
+function FeeCue({ charge, onPayment }: { charge: FeeCharge; onPayment: (charge: FeeCharge) => void }) {
+  return <article className={`fee-cue ${charge.displayStatus}`}><div className={`child-dot ${charge.childColor}`}>{charge.childName.slice(0, 1).toUpperCase()}</div><div><span>{charge.childName} · {charge.enrollmentName}</span><strong>{formatMoney(charge.outstandingAmountMinor, charge.currency)}</strong><small>{charge.displayStatus === "overdue" ? `Overdue since ${shortDate(charge.dueDate)}` : `Due ${shortDate(charge.dueDate)}`}</small></div><button className="attendance-action" onClick={() => onPayment(charge)}>Pay</button></article>;
+}
+
+function FeeCard({ charge, onPayment, onAdjust }: { charge: FeeCharge; onPayment: (charge: FeeCharge) => void; onAdjust: (charge: FeeCharge) => void }) {
+  const isDue = charge.status === "due";
+  return (
+    <article className={`fee-card ${charge.displayStatus}`}>
+      <div className="fee-card-head"><div><span>{charge.childName} · {charge.enrollmentName}</span><h3>{periodLabel(charge)}</h3><p>{feeModelLabel(charge.model)} · {charge.providerName ?? "Provider not added"}</p></div><span className={`fee-status ${charge.displayStatus}`}>{charge.displayStatus}</span></div>
+      <div className="fee-amount-row"><div><span>{isDue ? "Outstanding" : "Paid"}</span><strong>{formatMoney(isDue ? charge.outstandingAmountMinor : charge.paidAmountMinor, charge.currency)}</strong></div><div><span>Confirmed fee</span><strong>{formatMoney(charge.confirmedAmountMinor, charge.currency)}</strong></div></div>
+      <div className="calculation-note"><strong>How ClassCue calculated it</strong><p>{charge.calculation.explanation ?? "Configured fee amount."}{charge.suggestedAmountMinor !== charge.confirmedAmountMinor ? ` Parent confirmed ${formatMoney(charge.confirmedAmountMinor, charge.currency)}.` : ""}</p></div>
+      {charge.adjustments[0] && <p className="adjustment-line">Latest adjustment: {charge.adjustments[0].reason}</p>}
+      {charge.payments[0] && <p className="payment-line">Last payment: {formatMoney(charge.payments[0].amountMinor, charge.currency)} · {paymentMethodLabel(charge.payments[0].method)} · {shortDate(charge.payments[0].paidAt)}</p>}
+      <div className="fee-actions">{isDue && <button className="primary-button" onClick={() => onPayment(charge)}>Record payment</button>}<button className="secondary-button" onClick={() => onAdjust(charge)}>Adjust amount</button><button className="share-action" onClick={() => shareFee(charge)}>Share</button></div>
+    </article>
+  );
 }
 
 function ChildSheet({ onClose, onSaved }: { onClose: () => void; onSaved: () => Promise<void> }) {
@@ -330,6 +466,80 @@ function EnrollmentSheet({ familyChildren, onClose, onSaved }: { familyChildren:
   if (familyChildren.length === 0) return <Sheet title="Add a class" subtitle="A child is needed first" onClose={onClose}><p className="muted">Close this panel and add a child before creating their first class.</p></Sheet>;
 
   return <Sheet title="Add a recurring class" subtitle="Class details and weekly schedule" onClose={onClose}><form onSubmit={submit} className="sheet-form two-column"><label>Child<select name="childId" required>{familyChildren.map((child) => <option value={child.id} key={child.id}>{child.name}</option>)}</select></label><label>Subject<input name="subject" required maxLength={100} placeholder="Math tuition" /></label><label className="span-two">Institute or teacher business<input name="instituteName" required maxLength={120} placeholder="Bright Minds Centre" /></label><label>Teacher name<input name="teacherName" maxLength={100} placeholder="Mr. Ali" /></label><label>Teacher phone<input name="teacherPhone" maxLength={40} inputMode="tel" placeholder="+971…" /></label><label>Weekly day<select name="weekday" required>{weekdays.map((day, index) => <option key={day} value={index}>{day}</option>)}</select></label><label>Start time<input name="startTime" type="time" required defaultValue="16:00" /></label><label>Duration<select name="durationMinutes" defaultValue="60"><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option></select></label><label>Location<input name="location" maxLength={160} placeholder="Room 3 or online" /></label>{error && <p className="form-error span-two">{error}</p>}<button className="primary-button span-two" disabled={saving}>{saving ? "Creating sessions…" : "Add class and prepare sessions"}</button></form></Sheet>;
+}
+
+function FeeSetupSheet({ snapshot, onClose, onSaved }: { snapshot: Snapshot; onClose: () => void; onSaved: () => Promise<void> }) {
+  const [model, setModel] = useState("monthly");
+  const [currency, setCurrency] = useState("AED");
+  const [override, setOverride] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const enrollments = snapshot.children.flatMap((child) => child.enrollments.map((enrollment) => ({ ...enrollment, childName: child.name }))).filter((enrollment) => !snapshot.fees.arrangements.some((arrangement) => arrangement.enrollmentId === enrollment.id));
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setSaving(true); setError(null);
+    const form = Object.fromEntries(new FormData(event.currentTarget));
+    const response = await fetch("/api/fee-arrangements", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...form, model, currency, sessionsIncluded: form.sessionsIncluded || null, confirmedAmount: override ? form.confirmedAmount : null, adjustmentReason: override ? form.adjustmentReason : null }) });
+    if (!response.ok) { const data = await response.json() as { error?: string }; setError(data.error ?? "Could not add this fee arrangement."); setSaving(false); return; }
+    await onSaved();
+  }
+
+  if (enrollments.length === 0) return <Sheet title="Add fee arrangement" subtitle="Every active class is covered" onClose={onClose}><p className="muted">There are no classes without an active fee arrangement.</p></Sheet>;
+  return (
+    <Sheet title="Add fee arrangement" subtitle="Terms and first amount due" onClose={onClose}>
+      <form onSubmit={submit} className="sheet-form fee-form">
+        <label>Child and class<select name="enrollmentId" required>{enrollments.map((enrollment) => <option key={enrollment.id} value={enrollment.id}>{enrollment.childName} · {enrollment.name}</option>)}</select></label>
+        <fieldset><legend>How is this class charged?</legend><div className="model-options">{[["monthly", "Monthly"], ["term", "Term"], ["package", "Package"], ["per_session", "Per session"]].map(([value, label]) => <button type="button" key={value} className={model === value ? "selected" : ""} onClick={() => setModel(value)}><strong>{label}</strong><small>{feeModelHint(value)}</small></button>)}</div></fieldset>
+        <div className="money-grid"><label>Currency<input value={currency} onChange={(event) => setCurrency(event.target.value.toUpperCase().slice(0, 3))} required pattern="[A-Z]{3}" maxLength={3} /></label><label>{model === "per_session" ? "Rate per session" : model === "package" ? "Package price" : "Configured amount"}<input name="amount" type="number" inputMode="decimal" min={moneyStep(currency)} step={moneyStep(currency)} required placeholder="0.00" /></label></div>
+        {(model === "monthly" || model === "package") && <label>{model === "package" ? "Sessions purchased" : "Expected sessions this month"}<input name="sessionsIncluded" type="number" min={1} max={1000} required /></label>}
+        <label>Missed-class policy<select name="compensationPolicy" defaultValue="manual"><option value="none">No compensation</option><option value="makeup">Makeup class</option><option value="credit">Session credit</option><option value="manual">Decide case by case</option></select></label>
+        <div className="replacement-grid"><label>Period starts<input name="periodStart" type="date" defaultValue={monthStart(snapshot.household.today)} required /></label><label>Period ends<input name="periodEnd" type="date" defaultValue={monthEnd(snapshot.household.today)} required /></label><label className="span-two">Payment due<input name="dueDate" type="date" defaultValue={snapshot.household.today} required /></label></div>
+        <label className="check-row"><input type="checkbox" checked={override} onChange={(event) => setOverride(event.target.checked)} /><span><strong>Use a different first amount</strong><small>For a discount, carry-forward, or another agreed adjustment</small></span></label>
+        {override && <div className="adjustment-panel"><label>Confirmed first amount<input name="confirmedAmount" type="number" inputMode="decimal" min={moneyStep(currency)} step={moneyStep(currency)} required /></label><label>Why is it different?<textarea name="adjustmentReason" required maxLength={300} placeholder="e.g. three-month prepayment discount" /></label></div>}
+        <div className="calculation-note"><strong>Parent-controlled suggestion</strong><p>ClassCue calculates the first due amount from these terms. Any different confirmed amount keeps its explanation in history.</p></div>
+        {error && <p className="form-error">{error}</p>}<button className="primary-button" disabled={saving}>{saving ? "Saving fee…" : "Save arrangement and first fee"}</button>
+      </form>
+    </Sheet>
+  );
+}
+
+function PaymentSheet({ charge, today, onClose, onSaved }: { charge: FeeCharge; today: string; onClose: () => void; onSaved: () => Promise<void> }) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setSaving(true); setError(null);
+    const form = Object.fromEntries(new FormData(event.currentTarget));
+    const response = await fetch(`/api/fee-charges/${charge.id}/payments`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(form) });
+    if (!response.ok) { const data = await response.json() as { error?: string }; setError(data.error ?? "Could not record this payment."); setSaving(false); return; }
+    await onSaved();
+  }
+  return <Sheet title={`${charge.childName} · ${charge.enrollmentName}`} subtitle="Record a payment" onClose={onClose}><form onSubmit={submit} className="sheet-form"><div className="payment-hero"><span>Outstanding</span><strong>{formatMoney(charge.outstandingAmountMinor, charge.currency)}</strong><small>{periodLabel(charge)}</small></div><label>Amount paid<input name="amount" type="number" inputMode="decimal" min={moneyStep(charge.currency)} max={minorToInput(charge.outstandingAmountMinor, charge.currency)} step={moneyStep(charge.currency)} defaultValue={minorToInput(charge.outstandingAmountMinor, charge.currency)} required /></label><div className="replacement-grid"><label>Payment date<input name="paidAt" type="date" defaultValue={today} required /></label><label>Method<select name="method" defaultValue="bank_transfer"><option value="cash">Cash</option><option value="bank_transfer">Bank transfer</option><option value="card">Card</option><option value="online">Online payment</option><option value="other">Other</option></select></label></div><label>Reference<input name="reference" maxLength={120} placeholder="Transfer or receipt reference" /></label><label>Optional note<textarea name="note" maxLength={500} placeholder="Anything useful about this payment" /></label><div className="calculation-note"><strong>Partial payments are supported</strong><p>If this is less than the outstanding amount, the fee remains due with the remaining balance visible.</p></div>{error && <p className="form-error">{error}</p>}<button className="primary-button" disabled={saving}>{saving ? "Recording…" : "Record payment"}</button></form></Sheet>;
+}
+
+function FeeAdjustmentSheet({ charge, onClose, onSaved }: { charge: FeeCharge; onClose: () => void; onSaved: () => Promise<void> }) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setSaving(true); setError(null);
+    const form = Object.fromEntries(new FormData(event.currentTarget));
+    const response = await fetch(`/api/fee-charges/${charge.id}/adjust`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(form) });
+    if (!response.ok) { const data = await response.json() as { error?: string }; setError(data.error ?? "Could not adjust this fee."); setSaving(false); return; }
+    await onSaved();
+  }
+  return <Sheet title="Confirm a different amount" subtitle={`${charge.childName} · ${periodLabel(charge)}`} onClose={onClose}><form onSubmit={submit} className="sheet-form"><div className="attendance-context"><div><span>Suggested</span><strong>{formatMoney(charge.suggestedAmountMinor, charge.currency)}</strong></div><div><span>Currently confirmed</span><strong>{formatMoney(charge.confirmedAmountMinor, charge.currency)}</strong></div></div><label>New confirmed amount<input name="confirmedAmount" type="number" inputMode="decimal" min={minorToInput(Math.max(1, charge.paidAmountMinor), charge.currency)} step={moneyStep(charge.currency)} defaultValue={minorToInput(charge.confirmedAmountMinor, charge.currency)} required /></label><label>Adjustment reason<textarea name="reason" required maxLength={300} placeholder="Discount, cancellation credit, longer prepayment, or correction" /></label><div className="separation-note"><strong>The original suggestion stays visible</strong><p>This adds an adjustment entry; it does not erase the earlier calculation or payments.</p></div>{error && <p className="form-error">{error}</p>}<button className="primary-button" disabled={saving}>{saving ? "Saving adjustment…" : "Confirm adjusted amount"}</button></form></Sheet>;
+}
+
+function NewChargeSheet({ arrangement, today, onClose, onSaved }: { arrangement: FeeArrangement; today: string; onClose: () => void; onSaved: () => Promise<void> }) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setSaving(true); setError(null);
+    const form = Object.fromEntries(new FormData(event.currentTarget));
+    const response = await fetch(`/api/fee-arrangements/${arrangement.id}/charges`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(form) });
+    if (!response.ok) { const data = await response.json() as { error?: string }; setError(data.error ?? "Could not create the next fee."); setSaving(false); return; }
+    await onSaved();
+  }
+  return <Sheet title={`${arrangement.childName} · ${arrangement.enrollmentName}`} subtitle="Add the next fee" onClose={onClose}><form onSubmit={submit} className="sheet-form"><div className="future-preview"><strong>{feeModelLabel(arrangement.model)} suggestion</strong><p>{arrangement.model === "per_session" ? "ClassCue counts scheduled and makeup sessions in the selected period." : arrangement.model === "monthly" || arrangement.model === "term" ? "ClassCue uses the previous paid amount when available, otherwise the configured amount." : `ClassCue uses the ${arrangement.sessionsIncluded ?? 0}-session package price.`}</p></div><div className="replacement-grid"><label>Period starts<input name="periodStart" type="date" defaultValue={monthStart(today)} required /></label><label>Period ends<input name="periodEnd" type="date" defaultValue={monthEnd(today)} required /></label><label className="span-two">Payment due<input name="dueDate" type="date" defaultValue={today} required /></label></div><p className="muted">After the fee is created, its calculation is visible and you can confirm a different amount with a reason.</p>{error && <p className="form-error">{error}</p>}<button className="primary-button" disabled={saving}>{saving ? "Calculating…" : "Create suggested fee"}</button></form></Sheet>;
 }
 
 function AttendanceSheet({ session, onClose, onSaved }: { session: ClassSession; onClose: () => void; onSaved: () => Promise<void> }) {
@@ -488,3 +698,14 @@ function statusTone(status: string) { return status === "cancelled" ? "absent" :
 function todayInZone(timezone: string) { return new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone: timezone }).format(new Date()); }
 function futureReplacementDate(session: ClassSession) { return session.canChangeFutureRecurrence ? session.localDate : todayInZone(session.timezone); }
 function localStartTime(session: ClassSession) { return new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: session.timezone }).format(new Date(session.plannedStartAt)); }
+function feeModelLabel(model: string) { return ({ monthly: "Monthly", term: "Term", package: "Prepaid package", per_session: "Per session" } as Record<string, string>)[model] ?? model; }
+function feeModelHint(model: string) { return ({ monthly: "One amount each month", term: "One amount for a term", package: "Prepaid session balance", per_session: "Rate × classes in period" } as Record<string, string>)[model] ?? ""; }
+function paymentMethodLabel(method: string) { return ({ cash: "Cash", bank_transfer: "Bank transfer", card: "Card", online: "Online", other: "Other" } as Record<string, string>)[method] ?? method; }
+function currencyDecimals(currency: string) { return ["BHD", "JOD", "KWD", "OMR", "TND"].includes(currency) ? 3 : ["JPY", "KRW", "VND"].includes(currency) ? 0 : 2; }
+function formatMoney(amountMinor: number, currency: string) { const decimals = currencyDecimals(currency); return new Intl.NumberFormat("en", { style: "currency", currency, minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(amountMinor / 10 ** decimals); }
+function minorToInput(amountMinor: number, currency: string) { const decimals = currencyDecimals(currency); return (amountMinor / 10 ** decimals).toFixed(decimals); }
+function moneyStep(currency: string) { return currencyDecimals(currency) === 0 ? "1" : currencyDecimals(currency) === 3 ? "0.001" : "0.01"; }
+function monthStart(value: string) { return `${value.slice(0, 7)}-01`; }
+function monthEnd(value: string) { const [year, month] = value.split("-").map(Number); return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10); }
+function periodLabel(charge: Pick<FeeCharge, "periodStart" | "periodEnd">) { const start = shortDate(charge.periodStart); const end = shortDate(charge.periodEnd); return charge.periodStart === charge.periodEnd ? start : `${start} – ${end}`; }
+async function shareFee(charge: FeeCharge) { const text = `${charge.childName} · ${charge.enrollmentName}: ${formatMoney(charge.outstandingAmountMinor || charge.confirmedAmountMinor, charge.currency)} ${charge.status === "paid" ? "paid" : `due ${shortDate(charge.dueDate)}`}.`; if (navigator.share) await navigator.share({ title: "ClassCue fee reminder", text }).catch(() => undefined); else await navigator.clipboard?.writeText(text).catch(() => undefined); }

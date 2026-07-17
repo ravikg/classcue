@@ -235,3 +235,116 @@ export const attendanceRecords = sqliteTable("attendance_records", {
   recordedAt: text("recorded_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
+
+export const feeArrangements = sqliteTable(
+  "fee_arrangements",
+  {
+    id: text("id").primaryKey(),
+    enrollmentId: text("enrollment_id")
+      .notNull()
+      .references(() => enrollments.id, { onDelete: "cascade" }),
+    model: text("model").notNull(),
+    currency: text("currency").notNull(),
+    baseAmountMinor: integer("base_amount_minor").notNull(),
+    sessionsIncluded: integer("sessions_included"),
+    billingCadence: text("billing_cadence"),
+    validFrom: text("valid_from").notNull(),
+    validTo: text("valid_to"),
+    compensationPolicy: text("compensation_policy").notNull().default("manual"),
+    configurationJson: text("configuration_json"),
+    status: text("status").notNull().default("active"),
+    version: integer("version").notNull().default(1),
+    ...timestamps,
+  },
+  (table) => [
+    index("fee_arrangements_enrollment_idx").on(table.enrollmentId),
+    index("fee_arrangements_status_idx").on(table.status),
+  ],
+);
+
+export const feeCharges = sqliteTable(
+  "fee_charges",
+  {
+    id: text("id").primaryKey(),
+    feeArrangementId: text("fee_arrangement_id")
+      .notNull()
+      .references(() => feeArrangements.id, { onDelete: "cascade" }),
+    periodStart: text("period_start").notNull(),
+    periodEnd: text("period_end").notNull(),
+    dueDate: text("due_date").notNull(),
+    suggestedAmountMinor: integer("suggested_amount_minor").notNull(),
+    confirmedAmountMinor: integer("confirmed_amount_minor").notNull(),
+    currency: text("currency").notNull(),
+    status: text("status").notNull().default("due"),
+    calculationSnapshot: text("calculation_snapshot").notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("fee_charges_arrangement_period_uidx").on(
+      table.feeArrangementId,
+      table.periodStart,
+      table.periodEnd,
+    ),
+    index("fee_charges_due_status_idx").on(table.dueDate, table.status),
+  ],
+);
+
+export const feeAdjustments = sqliteTable(
+  "fee_adjustments",
+  {
+    id: text("id").primaryKey(),
+    feeChargeId: text("fee_charge_id")
+      .notNull()
+      .references(() => feeCharges.id, { onDelete: "cascade" }),
+    sessionId: text("session_id").references(() => sessions.id),
+    kind: text("kind").notNull(),
+    amountMinor: integer("amount_minor").notNull(),
+    sessionQuantity: integer("session_quantity"),
+    reason: text("reason").notNull(),
+    source: text("source").notNull().default("parent"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [index("fee_adjustments_charge_idx").on(table.feeChargeId)],
+);
+
+export const payments = sqliteTable(
+  "payments",
+  {
+    id: text("id").primaryKey(),
+    feeChargeId: text("fee_charge_id")
+      .notNull()
+      .references(() => feeCharges.id, { onDelete: "cascade" }),
+    amountMinor: integer("amount_minor").notNull(),
+    currency: text("currency").notNull(),
+    paidAt: text("paid_at").notNull(),
+    method: text("method").notNull(),
+    reference: text("reference"),
+    note: text("note"),
+    createdByUserId: text("created_by_user_id")
+      .notNull()
+      .references(() => users.id),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [index("payments_charge_idx").on(table.feeChargeId)],
+);
+
+export const sessionCreditEntries = sqliteTable(
+  "session_credit_entries",
+  {
+    id: text("id").primaryKey(),
+    enrollmentId: text("enrollment_id")
+      .notNull()
+      .references(() => enrollments.id, { onDelete: "cascade" }),
+    feeChargeId: text("fee_charge_id").references(() => feeCharges.id),
+    sessionId: text("session_id").references(() => sessions.id),
+    entryType: text("entry_type").notNull(),
+    quantity: integer("quantity").notNull(),
+    reason: text("reason").notNull(),
+    occurredAt: text("occurred_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("session_credit_entries_enrollment_idx").on(table.enrollmentId),
+    uniqueIndex("session_credit_entries_charge_type_uidx").on(table.feeChargeId, table.entryType),
+    uniqueIndex("session_credit_entries_session_type_uidx").on(table.sessionId, table.entryType),
+  ],
+);

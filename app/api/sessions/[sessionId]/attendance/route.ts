@@ -1,7 +1,8 @@
 import { and, eq, sql } from "drizzle-orm";
-import { getDb } from "@/db";
+import { getD1, getDb } from "@/db";
 import { attendanceRecords, enrollments, sessions } from "@/db/schema";
 import { apiError, requireApiContext } from "@/src/modules/identity/api-context";
+import { newId } from "@/src/shared/ids";
 
 type AttendanceRequest = {
   attendanceStatus?: string;
@@ -23,6 +24,7 @@ export async function POST(
     const [session] = await db
       .select({
         id: sessions.id,
+        enrollmentId: sessions.enrollmentId,
         status: sessions.status,
         plannedStartAt: sessions.plannedStartAt,
       })
@@ -98,6 +100,10 @@ export async function POST(
           updatedAt: sql`CURRENT_TIMESTAMP`,
         },
       });
+
+    await getD1().prepare(
+      "INSERT OR IGNORE INTO session_credit_entries (id, enrollment_id, session_id, entry_type, quantity, reason) SELECT ?, ?, ?, 'use', -1, 'Session recorded as completed' WHERE EXISTS (SELECT 1 FROM fee_arrangements WHERE enrollment_id = ? AND model = 'package' AND status = 'active') AND NOT EXISTS (SELECT 1 FROM session_links WHERE target_session_id = ? AND link_type = 'makeup')",
+    ).bind(newId("crd"), session.enrollmentId, sessionId, session.enrollmentId, sessionId).run();
 
     return Response.json({
       attendance: { sessionId, attendanceStatus, punctuality, minutesLate, note },

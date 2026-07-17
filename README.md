@@ -6,7 +6,7 @@ The repository uses [vinext](https://github.com/cloudflare/vinext), with Cloudfl
 
 ## Current Status
 
-The product foundation, recurring-class flow, attendance, and schedule-exception stages are complete. A signed-in parent can create a household, add children and recurring classes, record attendance and lateness, cancel or reschedule one session, link makeups, and explicitly change this-and-future recurrence without rewriting history.
+The product foundation, recurring classes, attendance, schedule exceptions, and fees/payments stages are complete. A signed-in parent can manage classes, attendance, makeups, flexible fee arrangements, due amounts, adjustments, payments, currencies, and prepaid-session balances without rewriting history.
 
 ## Product Documentation
 
@@ -75,11 +75,23 @@ Dates and times use Gulf Standard Time (`Asia/Dubai`, UTC+4).
 - Added safe runtime migrations for existing D1 databases plus regression coverage for history, links, and recurrence boundaries.
 - Verified the production build, TypeScript, contract tests, and authenticated end-to-end cancellation, makeup, reschedule, and future-recurrence flows.
 
+### 18 July 2026, 12:30 AM GST — Fees and payments completed
+
+- Added monthly, term, prepaid-package, and per-session fee arrangements for each child’s class.
+- Stored money as integer minor units and kept due and paid totals separated by ISO currency.
+- Added explainable suggested charges using configured terms, billable session counts, or the previous paid amount.
+- Added parent-confirmed overrides with required reasons and append-only adjustment history.
+- Added due, overdue, partial-payment, and paid states with payment date, method, reference, and notes.
+- Added fee highlights on Today, child-level paid/due summaries, detailed Fees views, and manual fee-reminder sharing.
+- Added package purchase and usage ledger entries, with paid package credits automatically created and completed non-makeup sessions consuming one credit.
+- Added safe D1 billing migrations, household-scoped authorization, currency-aware validation, and regression coverage.
+- Verified all four fee models plus mixed currencies, first and later adjustments, partial and full payments, previous-payment suggestions, and package-balance consumption through authenticated end-to-end flows.
+
 ### Next stage
 
-- Add the fees and payments domain with monthly, term, package, and per-session charging patterns.
-- Track due and paid amounts, currencies, payment methods, adjustments, and optional receipts.
-- Surface fee reminders and child-level due summaries without coupling payments to attendance.
+- Add configurable class, upcoming-fee, and repeating overdue-fee reminders.
+- Add notification delivery history and phone-friendly reminder sharing for classes and fees.
+- Add the first parent-reviewed AI suggestions for fee explanations, reminder timing, and household patterns.
 
 ## Prerequisites
 

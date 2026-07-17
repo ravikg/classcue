@@ -136,6 +136,65 @@ button { color: inherit; }
 .history-status.absent { background: var(--coral-soft); color: #b5412a; }
 .history-status.pending { background: var(--blue-soft); color: var(--blue); }
 .child-card .secondary-button { width: 100%; }
+.child-fee-summary { display: flex; justify-content: space-between; gap: 12px; padding: 12px 14px; margin: -3px 0 18px; border-radius: 14px; background: var(--blue-soft); color: #275fbd; font-size: 11px; }
+.child-fee-summary span { font-weight: 750; }
+.child-fee-summary strong { text-align: right; }
+.today-fees { display: grid; gap: 9px; margin-bottom: 34px; }
+.today-fees .section-heading { margin-bottom: 4px; }
+.fee-cue { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 13px; padding: 15px; border: 1px solid var(--line); border-radius: 19px; background: var(--white); }
+.fee-cue.overdue { border-color: #efc6bc; background: #fff9f7; }
+.fee-cue > div:nth-child(2) { display: grid; gap: 2px; min-width: 0; }
+.fee-cue span, .fee-cue small { color: var(--ink-soft); font-size: 10px; }
+.fee-cue strong { font-size: 18px; }
+.fee-onboarding { margin-bottom: 20px; }
+.fee-total-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 35px; }
+.fee-total-grid > div { min-width: 0; padding: 18px; border-radius: 19px; background: var(--ink); color: white; }
+.fee-total-grid span { display: block; color: #a9c6be; font-size: 10px; font-weight: 850; letter-spacing: .1em; }
+.fee-total-grid strong { display: block; margin-top: 8px; font-size: 24px; letter-spacing: -.04em; overflow: hidden; text-overflow: ellipsis; }
+.fee-total-grid small { color: #b9cbc5; font-size: 10px; }
+.fee-total-grid p { margin: 12px 0 0; color: #d8e3df; font-size: 11px; }
+.fee-section-heading { margin-top: 35px; }
+.fee-list, .arrangement-list { display: grid; gap: 12px; }
+.settled-card { display: flex; align-items: center; gap: 13px; padding: 18px; border-radius: 19px; background: var(--green-soft); color: var(--green); }
+.settled-card > span { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 13px; background: var(--green); color: white; font-weight: 900; }
+.settled-card strong { font-size: 14px; }
+.settled-card p { margin: 2px 0 0; color: #527d70; font-size: 11px; }
+.fee-card { padding: 20px; border: 1px solid var(--line); border-radius: 23px; background: var(--white); }
+.fee-card.overdue { border-color: #efc6bc; box-shadow: inset 4px 0 var(--coral); }
+.fee-card.paid { background: linear-gradient(120deg, white, #f4fbf8); }
+.fee-card-head { display: flex; align-items: start; justify-content: space-between; gap: 15px; }
+.fee-card-head > div { min-width: 0; }
+.fee-card-head span:first-child { color: var(--blue); font-size: 10px; font-weight: 850; text-transform: uppercase; letter-spacing: .07em; }
+.fee-card-head h3 { margin: 5px 0 4px; font-size: 18px; letter-spacing: -.025em; }
+.fee-card-head p { margin: 0; color: var(--ink-soft); font-size: 11px; }
+.fee-status { flex: none; padding: 5px 8px; border-radius: 999px; background: var(--gold-soft); color: #8a6210; font-size: 9px; font-weight: 850; text-transform: capitalize; }
+.fee-status.overdue { background: var(--coral-soft); color: #b5412a; }
+.fee-status.paid { background: var(--green-soft); color: var(--green); }
+.fee-amount-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 17px 0 12px; }
+.fee-amount-row div { padding: 13px; border-radius: 14px; background: #f0f4f1; }
+.fee-amount-row span { display: block; color: var(--ink-soft); font-size: 9px; }
+.fee-amount-row strong { display: block; margin-top: 3px; font-size: 17px; }
+.calculation-note { padding: 13px 14px; border-radius: 14px; background: var(--blue-soft); color: #275fbd; }
+.calculation-note strong { font-size: 11px; }
+.calculation-note p { margin: 3px 0 0; color: #4f6f9f; font-size: 10px; line-height: 1.45; }
+.adjustment-line, .payment-line { margin: 10px 2px 0; color: var(--ink-soft); font-size: 10px; }
+.fee-actions { display: grid; grid-template-columns: 1fr 1fr auto; gap: 7px; margin-top: 15px; }
+.fee-actions .primary-button, .fee-actions .secondary-button { min-height: 40px; padding-inline: 11px; font-size: 10px; }
+.share-action { min-width: 48px; border: 1px solid var(--line); border-radius: 13px; background: white; color: var(--blue); font-size: 10px; font-weight: 850; cursor: pointer; }
+.paid-list .fee-actions { grid-template-columns: 1fr auto; }
+.paid-list .fee-actions .primary-button { display: none; }
+.arrangement-card { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 14px; padding: 18px; border: 1px solid var(--line); border-radius: 20px; background: var(--white); }
+.arrangement-card > div:first-child { min-width: 0; }
+.arrangement-card span { color: var(--blue); font-size: 10px; font-weight: 800; }
+.arrangement-card h3 { margin: 3px 0; font-size: 16px; }
+.arrangement-card p { margin: 0; color: var(--ink-soft); font-size: 11px; }
+.arrangement-card .manage-action { grid-column: 1 / -1; width: fit-content; }
+.credit-balance { min-width: 92px; padding: 11px; border-radius: 14px; background: var(--green-soft); color: var(--green); text-align: center; }
+.credit-balance.low { background: var(--gold-soft); color: #8a6210; }
+.credit-balance strong, .credit-balance span, .credit-balance small { display: block; }
+.credit-balance strong { font-size: 23px; }
+.credit-balance span { color: inherit; font-size: 9px; }
+.credit-balance small { margin-top: 3px; opacity: .72; font-size: 8px; }
 .coming-card { margin-top: 70px; border-style: solid; }
 .coming-icon { display: grid; place-items: center; width: 54px; height: 54px; margin: 0 auto 18px; border-radius: 17px; background: var(--gold-soft); color: var(--gold); font-size: 28px; font-weight: 850; }
 .roadmap-line { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 24px auto 10px; max-width: 260px; }
@@ -168,6 +227,21 @@ button { color: inherit; }
 .sheet-form textarea { min-height: 80px; padding-block: 12px; resize: vertical; }
 .sheet-form input:focus, .sheet-form select:focus, .sheet-form textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(52,120,246,.12); }
 .sheet-form fieldset { border: 0; padding: 0; margin: 0; }
+.model-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 9px; }
+.model-options button { display: flex; flex-direction: column; gap: 3px; min-height: 75px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: #fafbf9; text-align: left; cursor: pointer; }
+.model-options button.selected { border: 2px solid var(--blue); background: var(--blue-soft); color: #275fbd; }
+.model-options strong { font-size: 12px; }
+.model-options small { color: var(--ink-soft); font-size: 9px; line-height: 1.3; }
+.money-grid { display: grid; grid-template-columns: .65fr 1.35fr; gap: 10px; }
+.check-row { display: flex; align-items: center; gap: 11px; padding: 13px; border: 1px solid var(--line); border-radius: 14px; background: #fafbf9; cursor: pointer; }
+.sheet-form .check-row input { flex: none; width: 20px; height: 20px; margin: 0; padding: 0; }
+.check-row span { display: flex; flex-direction: column; gap: 2px; }
+.check-row small { color: var(--ink-soft); font-size: 9px; font-weight: 600; }
+.adjustment-panel { display: grid; gap: 14px; padding: 15px; border-radius: 17px; background: var(--gold-soft); }
+.payment-hero { display: grid; padding: 20px; border-radius: 19px; background: var(--ink); color: white; text-align: center; }
+.payment-hero span { color: #a9c6be; font-size: 10px; text-transform: uppercase; letter-spacing: .1em; }
+.payment-hero strong { margin: 5px 0; font-size: 30px; letter-spacing: -.04em; }
+.payment-hero small { color: #c2d3cd; font-size: 10px; }
 .span-two { grid-column: 1 / -1; }
 .color-picker { display: flex; gap: 10px; margin-top: 9px; }
 .color-picker button { width: 44px; height: 44px; border: 3px solid transparent; border-radius: 14px; cursor: pointer; }
@@ -234,6 +308,10 @@ button { color: inherit; }
   .bottom-sheet { padding-inline: 18px; }
   .scope-options, .replacement-grid { grid-template-columns: 1fr; }
   .replacement-grid .span-two { grid-column: auto; }
+  .fee-total-grid { grid-template-columns: 1fr; }
+  .fee-actions { grid-template-columns: 1fr 1fr; }
+  .fee-actions .share-action { min-height: 39px; }
+  .money-grid { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {

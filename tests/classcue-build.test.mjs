@@ -139,3 +139,58 @@ test("suggestions require explicit parent review and use the normal reminder com
   assert.match(ui, /Saving creates or updates this one rule/);
   assert.match(ui, /ClassCue checks for due reminders while the app is open/);
 });
+
+test("contacts are reusable and one primary teacher is enforced per class", async () => {
+  const [migration, maintenance, enrollmentRoute, ui] = await Promise.all([
+    readFile(new URL("drizzle/0005_strange_sabretooth.sql", root), "utf8"),
+    readFile(new URL("src/modules/household/maintenance.ts", root), "utf8"),
+    readFile(new URL("app/api/enrollments/route.ts", root), "utf8"),
+    readFile(new URL("app/ClassCueApp.tsx", root), "utf8"),
+  ]);
+
+  assert.match(migration, /enrollment_contacts_primary_teacher_uidx/);
+  assert.match(migration, /role.*teacher.*is_primary/s);
+  assert.match(maintenance, /UPDATE enrollment_contacts SET is_primary = 0/);
+  assert.match(maintenance, /ON CONFLICT\(enrollment_id, contact_id, role\)/);
+  assert.match(maintenance, /contacts\.household_id = \?/);
+  assert.match(enrollmentRoute, /teacherContactId/);
+  assert.match(ui, /Reuse a saved teacher/);
+  assert.match(ui, /Payment support/);
+});
+
+test("class archiving preserves history, stops the future, and can be restored", async () => {
+  const [maintenance, todayQuery, bootstrap, ui] = await Promise.all([
+    readFile(new URL("src/modules/household/maintenance.ts", root), "utf8"),
+    readFile(new URL("src/modules/today/queries.ts", root), "utf8"),
+    readFile(new URL("app/api/bootstrap/route.ts", root), "utf8"),
+    readFile(new URL("app/ClassCueApp.tsx", root), "utf8"),
+  ]);
+
+  assert.match(maintenance, /SET status = 'archived', archived_at = CURRENT_TIMESTAMP/);
+  assert.match(maintenance, /reason = 'Enrollment archived'/);
+  assert.match(maintenance, /UPDATE fee_arrangements SET status = 'archived'/);
+  assert.match(maintenance, /INSERT INTO audit_events/);
+  assert.match(maintenance, /SET status = 'active', archived_at = NULL/);
+  assert.match(maintenance, /generateSessions/);
+  assert.match(todayQuery, /session\.enrollmentStatus === "active"/);
+  assert.match(bootstrap, /archivedEnrollments/);
+  assert.match(ui, /Attendance, fees, payments, and contact history remain available/);
+});
+
+test("household and record maintenance remains server scoped and phone accessible", async () => {
+  const [maintenance, childRoute, householdRoute, ui, styles] = await Promise.all([
+    readFile(new URL("src/modules/household/maintenance.ts", root), "utf8"),
+    readFile(new URL("app/api/children/[childId]/route.ts", root), "utf8"),
+    readFile(new URL("app/api/household/route.ts", root), "utf8"),
+    readFile(new URL("app/ClassCueApp.tsx", root), "utf8"),
+    readFile(new URL("app/globals.css", root), "utf8"),
+  ]);
+
+  assert.match(maintenance, /new Intl\.DateTimeFormat\("en", \{ timeZone: timezone \}\)/);
+  assert.match(maintenance, /version = version \+ 1/);
+  assert.match(childRoute, /requireApiContext/);
+  assert.match(householdRoute, /requireApiContext/);
+  assert.match(ui, /Edit household settings/);
+  assert.match(ui, /Online-class link/);
+  assert.match(styles, /\.contact-card/);
+});

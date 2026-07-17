@@ -19,10 +19,13 @@ type EnrollmentRequest = {
   instituteName?: string;
   teacherName?: string;
   teacherPhone?: string;
+  teacherEmail?: string;
+  teacherContactId?: string;
   weekday?: number;
   startTime?: string;
   durationMinutes?: number;
   location?: string;
+  onlineUrl?: string;
 };
 
 export async function POST(request: Request) {
@@ -45,6 +48,16 @@ export async function POST(request: Request) {
     }
     if (!Number.isInteger(durationMinutes) || durationMinutes < 15 || durationMinutes > 360) {
       return Response.json({ error: "Class duration must be between 15 minutes and 6 hours." }, { status: 400 });
+    }
+    let onlineUrl: string | null = null;
+    if (body.onlineUrl?.trim()) {
+      try {
+        const parsed = new URL(body.onlineUrl.trim());
+        if (parsed.protocol !== "https:" && parsed.protocol !== "http:") throw new Error();
+        onlineUrl = parsed.toString();
+      } catch {
+        return Response.json({ error: "Enter a valid http or https online-class link." }, { status: 400 });
+      }
     }
 
     const db = getDb();
@@ -77,6 +90,7 @@ export async function POST(request: Request) {
       subject,
       displayName: subject,
       location: body.location?.trim() || null,
+      onlineUrl,
       timezone: context.timezone,
       startDate: validFrom,
     });
@@ -91,15 +105,25 @@ export async function POST(request: Request) {
     });
 
     const teacherName = body.teacherName?.trim();
-    if (teacherName) {
-      const contactId = newId("con");
+    let contactId: string | null = null;
+    if (body.teacherContactId) {
+      const [ownedContact] = await db.select({ id: contacts.id }).from(contacts)
+        .where(and(eq(contacts.id, body.teacherContactId), eq(contacts.householdId, context.householdId)))
+        .limit(1);
+      if (!ownedContact) return Response.json({ error: "Teacher contact not found." }, { status: 404 });
+      contactId = ownedContact.id;
+    } else if (teacherName) {
+      contactId = newId("con");
       await db.insert(contacts).values({
         id: contactId,
         householdId: context.householdId,
         providerId: provider.id,
         name: teacherName,
         phone: body.teacherPhone?.trim() || null,
+        email: body.teacherEmail?.trim().toLowerCase() || null,
       });
+    }
+    if (contactId) {
       await db.insert(enrollmentContacts).values({
         enrollmentId,
         contactId,

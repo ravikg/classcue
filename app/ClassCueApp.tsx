@@ -8,8 +8,15 @@ type Enrollment = {
   name: string;
   subject: string;
   location: string | null;
+  onlineUrl: string | null;
+  timezone: string;
+  version: number;
   providerName: string | null;
 };
+
+type ContactLink = { enrollmentId: string; enrollmentName: string; childName: string; role: string; isPrimary: boolean; enrollmentStatus: string };
+type Contact = { id: string; providerId: string | null; providerName: string | null; name: string; phone: string | null; email: string | null; notes: string | null; links: ContactLink[] };
+type ArchivedEnrollment = { id: string; childId: string; childName: string; name: string; subject: string; location: string | null; onlineUrl: string | null; timezone: string; version: number; providerName: string | null; archivedAt: string };
 
 type Child = {
   id: string;
@@ -147,6 +154,7 @@ type ClassSession = {
   enrollmentName: string;
   providerName: string | null;
   location: string | null;
+  onlineUrl: string | null;
   localDate: string;
   plannedStartAt: string;
   plannedEndAt: string;
@@ -172,12 +180,14 @@ type ClassSession = {
 
 type Snapshot = {
   user: { displayName: string };
-  household: { timezone: string; today: string };
+  household: { name: string; timezone: string; today: string };
   children: Child[];
   upcomingSessions: ClassSession[];
   fees: FeesSnapshot;
   reminders: { rules: ReminderRule[]; dueJobs: ReminderJob[]; upcomingJobs: ReminderJob[]; deliveryHistory: ReminderJob[] };
   suggestions: Suggestion[];
+  contacts: Contact[];
+  archivedEnrollments: ArchivedEnrollment[];
 };
 
 type Tab = "today" | "children" | "fees" | "more";
@@ -201,6 +211,10 @@ export function ClassCueApp({ displayName }: { displayName: string }) {
   const [adjustCharge, setAdjustCharge] = useState<FeeCharge | null>(null);
   const [newChargeArrangement, setNewChargeArrangement] = useState<FeeArrangement | null>(null);
   const [reminderSetupOpen, setReminderSetupOpen] = useState(false);
+  const [editingChild, setEditingChild] = useState<Child | null>(null);
+  const [managingEnrollment, setManagingEnrollment] = useState<Enrollment | null>(null);
+  const [editingContact, setEditingContact] = useState<Contact | "new" | null>(null);
+  const [householdSettingsOpen, setHouseholdSettingsOpen] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">("default");
   const [error, setError] = useState<string | null>(null);
 
@@ -240,6 +254,10 @@ export function ClassCueApp({ displayName }: { displayName: string }) {
     setAdjustCharge(null);
     setNewChargeArrangement(null);
     setReminderSetupOpen(false);
+    setEditingChild(null);
+    setManagingEnrollment(null);
+    setEditingContact(null);
+    setHouseholdSettingsOpen(false);
   };
 
   const openAttendance = (session: ClassSession) => setAttendanceSession(session);
@@ -267,6 +285,13 @@ export function ClassCueApp({ displayName }: { displayName: string }) {
     await load();
   }
 
+  async function restoreEnrollment(enrollment: ArchivedEnrollment) {
+    setError(null);
+    const response = await fetch(`/api/enrollments/${enrollment.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "restore" }) });
+    if (!response.ok) { const data = await response.json() as { error?: string }; setError(data.error ?? "Could not restore this class."); return; }
+    await load();
+  }
+
   return (
     <main className="app-shell">
       <header className="app-header">
@@ -287,9 +312,9 @@ export function ClassCueApp({ displayName }: { displayName: string }) {
       ) : (
         <div className="app-content">
           {tab === "today" && <TodayView snapshot={snapshot} onAddChild={() => setSheet("child")} onAddClass={() => setSheet("enrollment")} onAttendance={openAttendance} onSchedule={setScheduleSession} onPayment={setPaymentCharge} onReminderAction={actOnReminder} />}
-          {tab === "children" && <ChildrenView snapshot={snapshot} onAddChild={() => setSheet("child")} onAddClass={() => setSheet("enrollment")} onAttendance={openAttendance} />}
+          {tab === "children" && <ChildrenView snapshot={snapshot} onAddChild={() => setSheet("child")} onAddClass={() => setSheet("enrollment")} onAttendance={openAttendance} onEditChild={setEditingChild} onManageEnrollment={setManagingEnrollment} />}
           {tab === "fees" && <FeesView snapshot={snapshot} onSetup={() => setFeeSetupOpen(true)} onPayment={setPaymentCharge} onAdjust={setAdjustCharge} onNewCharge={setNewChargeArrangement} />}
-          {tab === "more" && <MoreView snapshot={snapshot} notificationPermission={notificationPermission} onEnableNotifications={enableNotifications} onSetupReminder={() => setReminderSetupOpen(true)} onToggleReminder={toggleReminder} onReminderAction={actOnReminder} onReviewSuggestion={reviewSuggestion} />}
+          {tab === "more" && <MoreView snapshot={snapshot} notificationPermission={notificationPermission} onEnableNotifications={enableNotifications} onSetupReminder={() => setReminderSetupOpen(true)} onToggleReminder={toggleReminder} onReminderAction={actOnReminder} onReviewSuggestion={reviewSuggestion} onAddContact={() => setEditingContact("new")} onEditContact={setEditingContact} onHouseholdSettings={() => setHouseholdSettingsOpen(true)} onRestore={restoreEnrollment} />}
         </div>
       )}
 
@@ -302,7 +327,7 @@ export function ClassCueApp({ displayName }: { displayName: string }) {
       </nav>
 
       {sheet === "child" && <ChildSheet onClose={() => setSheet(null)} onSaved={refresh} />}
-      {sheet === "enrollment" && snapshot && <EnrollmentSheet familyChildren={snapshot.children} onClose={() => setSheet(null)} onSaved={refresh} />}
+      {sheet === "enrollment" && snapshot && <EnrollmentSheet familyChildren={snapshot.children} contacts={snapshot.contacts} onClose={() => setSheet(null)} onSaved={refresh} />}
       {attendanceSession && <AttendanceSheet session={attendanceSession} onClose={() => setAttendanceSession(null)} onSaved={refresh} />}
       {scheduleSession && <ScheduleChangeSheet session={scheduleSession} onClose={() => setScheduleSession(null)} onSaved={refresh} />}
       {feeSetupOpen && snapshot && <FeeSetupSheet snapshot={snapshot} onClose={() => setFeeSetupOpen(false)} onSaved={refresh} />}
@@ -310,6 +335,10 @@ export function ClassCueApp({ displayName }: { displayName: string }) {
       {adjustCharge && <FeeAdjustmentSheet charge={adjustCharge} onClose={() => setAdjustCharge(null)} onSaved={refresh} />}
       {newChargeArrangement && snapshot && <NewChargeSheet arrangement={newChargeArrangement} today={snapshot.household.today} onClose={() => setNewChargeArrangement(null)} onSaved={refresh} />}
       {reminderSetupOpen && snapshot && <ReminderSetupSheet snapshot={snapshot} onClose={() => setReminderSetupOpen(false)} onSaved={refresh} />}
+      {editingChild && <EditChildSheet child={editingChild} onClose={() => setEditingChild(null)} onSaved={refresh} />}
+      {managingEnrollment && snapshot && <ManageEnrollmentSheet enrollment={managingEnrollment} contacts={snapshot.contacts} onClose={() => setManagingEnrollment(null)} onSaved={refresh} />}
+      {editingContact && <ContactSheet contact={editingContact === "new" ? null : editingContact} onClose={() => setEditingContact(null)} onSaved={refresh} />}
+      {householdSettingsOpen && snapshot && <HouseholdSettingsSheet household={snapshot.household} onClose={() => setHouseholdSettingsOpen(false)} onSaved={refresh} />}
     </main>
   );
 }
@@ -384,7 +413,7 @@ function SessionCard({ session, showDate, onAttendance, onSchedule }: { session:
         <div className="session-topline"><span>{session.childName}</span><span className={`status-pill ${recorded ? attendanceTone(session) : statusTone(session.status)}`}>{recorded ? attendanceLabel(session) : statusLabel(session.status)}</span></div>
         <h3>{session.enrollmentName}</h3>
         <p>{showDate ? `${shortDate(session.localDate)} · ` : ""}{timeRange(session)}</p>
-        <p>{[session.providerName, session.location].filter(Boolean).join(" · ") || "Location not added"}</p>
+        <p>{[session.providerName, session.location ?? session.onlineUrl].filter(Boolean).join(" · ") || "Location not added"}</p>
         {session.reason && <p className="change-note">{session.reason}</p>}
         {session.compensationStatus === "pending" && <p className="balance-note">Makeup still owed</p>}
         {session.linkedSessionLocalDate && <p className="balance-note">{session.linkType === "makeup" ? "Makeup" : "Replacement"}: {shortDate(session.linkedSessionLocalDate)}</p>}
@@ -398,7 +427,7 @@ function SessionCard({ session, showDate, onAttendance, onSchedule }: { session:
   );
 }
 
-function ChildrenView({ snapshot, onAddChild, onAddClass, onAttendance }: { snapshot: Snapshot; onAddChild: () => void; onAddClass: () => void; onAttendance: (session: ClassSession) => void }) {
+function ChildrenView({ snapshot, onAddChild, onAddClass, onAttendance, onEditChild, onManageEnrollment }: { snapshot: Snapshot; onAddChild: () => void; onAddClass: () => void; onAttendance: (session: ClassSession) => void; onEditChild: (child: Child) => void; onManageEnrollment: (enrollment: Enrollment) => void }) {
   return (
     <>
       <div className="section-heading page-heading"><div><p className="eyebrow">Family</p><h1>Children</h1></div><button className="text-button" onClick={onAddChild}>+ Add child</button></div>
@@ -406,9 +435,9 @@ function ChildrenView({ snapshot, onAddChild, onAddClass, onAttendance }: { snap
         <section className="children-list">
           {snapshot.children.map((child) => (
             <article className="child-card" key={child.id}>
-              <div className="child-card-head"><div className={`child-dot large ${child.color}`}>{child.name.slice(0, 1).toUpperCase()}</div><div><h2>{child.name}</h2><p>{child.enrollments.length} active {child.enrollments.length === 1 ? "class" : "classes"}</p></div></div>
+              <div className="child-card-head"><div className={`child-dot large ${child.color}`}>{child.name.slice(0, 1).toUpperCase()}</div><div><h2>{child.name}</h2><p>{child.enrollments.length} active {child.enrollments.length === 1 ? "class" : "classes"}</p></div><button className="icon-text-button" onClick={() => onEditChild(child)}>Edit</button></div>
               <div className="class-chips">
-                {child.enrollments.map((enrollment) => <span key={enrollment.id}>{enrollment.name}<small>{enrollment.providerName}</small></span>)}
+                {child.enrollments.map((enrollment) => <button key={enrollment.id} onClick={() => onManageEnrollment(enrollment)}>{enrollment.name}<small>{enrollment.providerName}</small><em>Manage</em></button>)}
                 {child.enrollments.length === 0 && <p className="muted">No classes yet.</p>}
               </div>
               <div className="attendance-stats" aria-label={`${child.name} attendance summary`}>
@@ -440,7 +469,7 @@ function ChildrenView({ snapshot, onAddChild, onAddClass, onAttendance }: { snap
   );
 }
 
-function MoreView({ snapshot, notificationPermission, onEnableNotifications, onSetupReminder, onToggleReminder, onReminderAction, onReviewSuggestion }: { snapshot: Snapshot; notificationPermission: NotificationPermission | "unsupported"; onEnableNotifications: () => Promise<void>; onSetupReminder: () => void; onToggleReminder: (rule: ReminderRule) => Promise<void>; onReminderAction: (job: ReminderJob, status: "delivered" | "dismissed") => Promise<void>; onReviewSuggestion: (suggestion: Suggestion, decision: "accept" | "dismiss") => Promise<void> }) {
+function MoreView({ snapshot, notificationPermission, onEnableNotifications, onSetupReminder, onToggleReminder, onReminderAction, onReviewSuggestion, onAddContact, onEditContact, onHouseholdSettings, onRestore }: { snapshot: Snapshot; notificationPermission: NotificationPermission | "unsupported"; onEnableNotifications: () => Promise<void>; onSetupReminder: () => void; onToggleReminder: (rule: ReminderRule) => Promise<void>; onReminderAction: (job: ReminderJob, status: "delivered" | "dismissed") => Promise<void>; onReviewSuggestion: (suggestion: Suggestion, decision: "accept" | "dismiss") => Promise<void>; onAddContact: () => void; onEditContact: (contact: Contact) => void; onHouseholdSettings: () => void; onRestore: (enrollment: ArchivedEnrollment) => Promise<void> }) {
   return (
     <>
       <section className="page-intro"><p className="eyebrow">Reminders and account</p><h1>More</h1><p>Control what ClassCue brings to your attention. Nothing is shared or changed without your action.</p></section>
@@ -459,12 +488,19 @@ function MoreView({ snapshot, notificationPermission, onEnableNotifications, onS
 
       {snapshot.reminders.deliveryHistory.length > 0 && <><div className="section-heading more-section-heading"><div><p className="eyebrow">History</p><h2>Recent reminders</h2></div></div><section className="delivery-history">{snapshot.reminders.deliveryHistory.slice(0, 6).map((job) => <div key={job.id}><span className={job.status}>{job.status === "delivered" ? "✓" : "×"}</span><div><strong>{job.title}</strong><small>{dateTimeLabel(job.sentAt ?? job.scheduledFor)}</small></div></div>)}</section></>}
 
+      <div className="section-heading more-section-heading"><div><p className="eyebrow">Reuse across classes</p><h2>Contacts</h2></div><button className="text-button" onClick={onAddContact}>+ Add contact</button></div>
+      {snapshot.contacts.length === 0 ? <section className="empty-card compact"><h3>No saved contacts</h3><p>Save teachers, administrators, and payment support once, then link them to any class.</p><button className="primary-button" onClick={onAddContact}>Add contact</button></section> : <section className="contact-list">{snapshot.contacts.map((contact) => <button className="contact-card" key={contact.id} onClick={() => onEditContact(contact)}><span className="contact-avatar">{initials(contact.name)}</span><span><strong>{contact.name}</strong><small>{contact.providerName ?? contact.email ?? contact.phone}</small><em>{contact.links.filter((link) => link.enrollmentStatus === "active").length} active {contact.links.filter((link) => link.enrollmentStatus === "active").length === 1 ? "class" : "classes"}</em></span><b>›</b></button>)}</section>}
+
+      {snapshot.archivedEnrollments.length > 0 && <><div className="section-heading more-section-heading"><div><p className="eyebrow">History preserved</p><h2>Archived classes</h2></div></div><section className="archive-list">{snapshot.archivedEnrollments.map((enrollment) => <article key={enrollment.id}><div><strong>{enrollment.childName} · {enrollment.name}</strong><small>{enrollment.providerName ?? "Provider not added"} · archived {dateTimeLabel(enrollment.archivedAt)}</small></div><button className="secondary-button" onClick={() => onRestore(enrollment)}>Restore</button></article>)}</section></>}
+
       <div className="section-heading more-section-heading"><div><p className="eyebrow">Account</p><h2>Household</h2></div></div>
       <section className="settings-card">
         <div><span>Signed in as</span><strong>{snapshot.user.displayName}</strong></div>
+        <div><span>Household</span><strong>{snapshot.household.name}</strong></div>
         <div><span>Household timezone</span><strong>{snapshot.household.timezone}</strong></div>
         <div><span>Data ownership</span><strong>Private household</strong></div>
       </section>
+      <button className="secondary-button full-width" onClick={onHouseholdSettings}>Edit household settings</button>
       <a className="secondary-button full-width" href="/signout-with-chatgpt?return_to=/">Sign out</a>
     </>
   );
@@ -545,9 +581,10 @@ function ChildSheet({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
   return <Sheet title="Add a child" subtitle="Start the family view" onClose={onClose}><form onSubmit={submit} className="sheet-form"><label>Child’s name<input name="name" required maxLength={80} autoFocus placeholder="e.g. Maya" /></label><fieldset><legend>Profile colour</legend><div className="color-picker">{["blue", "coral", "green", "gold"].map((value) => <button type="button" key={value} className={`${value} ${color === value ? "selected" : ""}`} onClick={() => setColor(value)} aria-label={`Use ${value}`}><span>✓</span></button>)}</div></fieldset>{error && <p className="form-error">{error}</p>}<button className="primary-button" disabled={saving}>{saving ? "Adding…" : "Add child"}</button></form></Sheet>;
 }
 
-function EnrollmentSheet({ familyChildren, onClose, onSaved }: { familyChildren: Child[]; onClose: () => void; onSaved: () => Promise<void> }) {
+function EnrollmentSheet({ familyChildren, contacts, onClose, onSaved }: { familyChildren: Child[]; contacts: Contact[]; onClose: () => void; onSaved: () => Promise<void> }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [teacherContactId, setTeacherContactId] = useState("");
   const weekdays = useMemo(() => ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"], []);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -560,7 +597,93 @@ function EnrollmentSheet({ familyChildren, onClose, onSaved }: { familyChildren:
 
   if (familyChildren.length === 0) return <Sheet title="Add a class" subtitle="A child is needed first" onClose={onClose}><p className="muted">Close this panel and add a child before creating their first class.</p></Sheet>;
 
-  return <Sheet title="Add a recurring class" subtitle="Class details and weekly schedule" onClose={onClose}><form onSubmit={submit} className="sheet-form two-column"><label>Child<select name="childId" required>{familyChildren.map((child) => <option value={child.id} key={child.id}>{child.name}</option>)}</select></label><label>Subject<input name="subject" required maxLength={100} placeholder="Math tuition" /></label><label className="span-two">Institute or teacher business<input name="instituteName" required maxLength={120} placeholder="Bright Minds Centre" /></label><label>Teacher name<input name="teacherName" maxLength={100} placeholder="Mr. Ali" /></label><label>Teacher phone<input name="teacherPhone" maxLength={40} inputMode="tel" placeholder="+971…" /></label><label>Weekly day<select name="weekday" required>{weekdays.map((day, index) => <option key={day} value={index}>{day}</option>)}</select></label><label>Start time<input name="startTime" type="time" required defaultValue="16:00" /></label><label>Duration<select name="durationMinutes" defaultValue="60"><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option></select></label><label>Location<input name="location" maxLength={160} placeholder="Room 3 or online" /></label>{error && <p className="form-error span-two">{error}</p>}<button className="primary-button span-two" disabled={saving}>{saving ? "Creating sessions…" : "Add class and prepare sessions"}</button></form></Sheet>;
+  return <Sheet title="Add a recurring class" subtitle="Class details and weekly schedule" onClose={onClose}><form onSubmit={submit} className="sheet-form two-column"><label>Child<select name="childId" required>{familyChildren.map((child) => <option value={child.id} key={child.id}>{child.name}</option>)}</select></label><label>Subject<input name="subject" required maxLength={100} placeholder="Math tuition" /></label><label className="span-two">Institute or teacher business<input name="instituteName" required maxLength={120} placeholder="Bright Minds Centre" /></label>{contacts.length > 0 && <label className="span-two">Reuse a saved teacher<select name="teacherContactId" value={teacherContactId} onChange={(event) => setTeacherContactId(event.target.value)}><option value="">Add new teacher details below</option>{contacts.map((contact) => <option key={contact.id} value={contact.id}>{contact.name}{contact.providerName ? ` · ${contact.providerName}` : ""}</option>)}</select></label>}{!teacherContactId && <><label>Teacher name<input name="teacherName" maxLength={100} placeholder="Mr. Ali" /></label><label>Teacher phone<input name="teacherPhone" maxLength={40} inputMode="tel" placeholder="+971…" /></label></>}<label>Weekly day<select name="weekday" required>{weekdays.map((day, index) => <option key={day} value={index}>{day}</option>)}</select></label><label>Start time<input name="startTime" type="time" required defaultValue="16:00" /></label><label>Duration<select name="durationMinutes" defaultValue="60"><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option></select></label><label>Location<input name="location" maxLength={160} placeholder="Room 3 or address" /></label><label>Online-class link<input name="onlineUrl" type="url" maxLength={500} placeholder="https://…" /></label>{error && <p className="form-error span-two">{error}</p>}<button className="primary-button span-two" disabled={saving}>{saving ? "Creating sessions…" : "Add class and prepare sessions"}</button></form></Sheet>;
+}
+
+function EditChildSheet({ child, onClose, onSaved }: { child: Child; onClose: () => void; onSaved: () => Promise<void> }) {
+  const [color, setColor] = useState(child.color);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setSaving(true); setError(null);
+    const form = new FormData(event.currentTarget);
+    const response = await fetch(`/api/children/${child.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: form.get("name"), color }) });
+    if (!response.ok) { const data = await response.json() as { error?: string }; setError(data.error ?? "Could not update this child."); setSaving(false); return; }
+    await onSaved();
+  }
+  return <Sheet title={`Edit ${child.name}`} subtitle="Child profile" onClose={onClose}><form onSubmit={submit} className="sheet-form"><label>Child’s name<input name="name" required maxLength={80} defaultValue={child.name} autoFocus /></label><fieldset><legend>Profile colour</legend><div className="color-picker">{["blue", "coral", "green", "gold"].map((value) => <button type="button" key={value} className={`${value} ${color === value ? "selected" : ""}`} onClick={() => setColor(value)} aria-label={`Use ${value}`}><span>✓</span></button>)}</div></fieldset>{error && <p className="form-error">{error}</p>}<button className="primary-button" disabled={saving}>{saving ? "Saving…" : "Save child profile"}</button></form></Sheet>;
+}
+
+function ContactSheet({ contact, onClose, onSaved }: { contact: Contact | null; onClose: () => void; onSaved: () => Promise<void> }) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setSaving(true); setError(null);
+    const body = Object.fromEntries(new FormData(event.currentTarget));
+    const response = await fetch(contact ? `/api/contacts/${contact.id}` : "/api/contacts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    if (!response.ok) { const data = await response.json() as { error?: string }; setError(data.error ?? "Could not save this contact."); setSaving(false); return; }
+    await onSaved();
+  }
+  async function archive() {
+    if (!contact || !window.confirm(`Archive ${contact.name}? Their details stay in historical class records.`)) return;
+    setSaving(true); setError(null);
+    const response = await fetch(`/api/contacts/${contact.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "archive" }) });
+    if (!response.ok) { const data = await response.json() as { error?: string }; setError(data.error ?? "Could not archive this contact."); setSaving(false); return; }
+    await onSaved();
+  }
+  return <Sheet title={contact ? contact.name : "Add a contact"} subtitle="Reusable across classes" onClose={onClose}><form onSubmit={submit} className="sheet-form"><label>Name<input name="name" required maxLength={100} defaultValue={contact?.name} autoFocus /></label><label>Institute or business<input name="providerName" maxLength={120} defaultValue={contact?.providerName ?? ""} placeholder="Optional" /></label><div className="money-grid"><label>Phone<input name="phone" maxLength={40} inputMode="tel" defaultValue={contact?.phone ?? ""} placeholder="+971…" /></label><label>Email<input name="email" type="email" maxLength={160} defaultValue={contact?.email ?? ""} placeholder="name@example.com" /></label></div><label>Notes<textarea name="notes" maxLength={500} defaultValue={contact?.notes ?? ""} placeholder="Payment instructions, preferred contact time, or other support details" /></label>{contact && contact.links.length > 0 && <div className="linked-records"><strong>Linked classes</strong>{contact.links.map((link) => <span key={`${link.enrollmentId}-${link.role}`}>{link.childName} · {link.enrollmentName}<small>{contactRoleLabel(link.role)}{link.isPrimary ? " · primary" : ""}{link.enrollmentStatus === "archived" ? " · archived" : ""}</small></span>)}</div>}{error && <p className="form-error">{error}</p>}<button className="primary-button" disabled={saving}>{saving ? "Saving…" : contact ? "Save contact" : "Add contact"}</button>{contact && <button type="button" className="danger-button" disabled={saving} onClick={archive}>Archive contact</button>}</form></Sheet>;
+}
+
+function ManageEnrollmentSheet({ enrollment, contacts, onClose, onSaved }: { enrollment: Enrollment; contacts: Contact[]; onClose: () => void; onSaved: () => Promise<void> }) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const links = contacts.flatMap((contact) => contact.links.filter((link) => link.enrollmentId === enrollment.id).map((link) => ({ ...link, contact })));
+  const available = contacts.filter((contact) => !links.some((link) => link.contact.id === contact.id));
+  async function updateDetails(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setSaving(true); setError(null);
+    const response = await fetch(`/api/enrollments/${enrollment.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...Object.fromEntries(new FormData(event.currentTarget)), version: enrollment.version }) });
+    if (!response.ok) { const data = await response.json() as { error?: string }; setError(data.error ?? "Could not update this class."); setSaving(false); return; }
+    await onSaved();
+  }
+  async function link(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setSaving(true); setError(null);
+    const form = Object.fromEntries(new FormData(event.currentTarget));
+    const response = await fetch(`/api/enrollments/${enrollment.id}/contacts`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...form, isPrimary: form.isPrimary === "on" }) });
+    if (!response.ok) { const data = await response.json() as { error?: string }; setError(data.error ?? "Could not link this contact."); setSaving(false); return; }
+    await onSaved();
+  }
+  async function unlink(item: typeof links[number]) {
+    setSaving(true); setError(null);
+    const response = await fetch(`/api/enrollments/${enrollment.id}/contacts`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "unlink", contactId: item.contact.id, role: item.role }) });
+    if (!response.ok) { const data = await response.json() as { error?: string }; setError(data.error ?? "Could not remove this contact."); setSaving(false); return; }
+    await onSaved();
+  }
+  async function makePrimary(item: typeof links[number]) {
+    setSaving(true); setError(null);
+    const response = await fetch(`/api/enrollments/${enrollment.id}/contacts`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ contactId: item.contact.id, role: "teacher", isPrimary: true }) });
+    if (!response.ok) { const data = await response.json() as { error?: string }; setError(data.error ?? "Could not set the primary teacher."); setSaving(false); return; }
+    await onSaved();
+  }
+  async function archive() {
+    if (!window.confirm(`Archive ${enrollment.name}? Future recurring sessions will stop, while attendance and payment history stay available.`)) return;
+    setSaving(true); setError(null);
+    const response = await fetch(`/api/enrollments/${enrollment.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "archive" }) });
+    if (!response.ok) { const data = await response.json() as { error?: string }; setError(data.error ?? "Could not archive this class."); setSaving(false); return; }
+    await onSaved();
+  }
+  return <Sheet title={enrollment.name} subtitle="Class details and contacts" onClose={onClose}><div className="management-stack"><form onSubmit={updateDetails} className="sheet-form"><label>Display name<input name="displayName" required maxLength={100} defaultValue={enrollment.name} /></label><label>Subject<input name="subject" required maxLength={100} defaultValue={enrollment.subject} /></label><label>Institute or teacher business<input name="providerName" required maxLength={120} defaultValue={enrollment.providerName ?? ""} /></label><label>Location<input name="location" maxLength={160} defaultValue={enrollment.location ?? ""} placeholder="Studio, room, or address" /></label><label>Online-class link<input name="onlineUrl" type="url" maxLength={500} defaultValue={enrollment.onlineUrl ?? ""} placeholder="https://…" /></label><button className="primary-button" disabled={saving}>{saving ? "Saving…" : "Save class details"}</button></form><section className="manage-contacts"><div className="mini-heading"><strong>Class contacts</strong><span>{links.length}</span></div>{links.length === 0 ? <p className="muted">No contacts linked yet.</p> : links.map((item) => <div className="linked-contact" key={`${item.contact.id}-${item.role}`}><span><strong>{item.contact.name}</strong><small>{contactRoleLabel(item.role)}{item.isPrimary ? " · primary" : ""}</small></span><div>{item.role === "teacher" && !item.isPrimary && <button onClick={() => makePrimary(item)} disabled={saving}>Make primary</button>}<button onClick={() => unlink(item)} disabled={saving}>Remove</button></div></div>)}{available.length > 0 && <form onSubmit={link} className="link-contact-form"><label>Saved contact<select name="contactId" required>{available.map((contact) => <option key={contact.id} value={contact.id}>{contact.name}</option>)}</select></label><label>Role<select name="role" defaultValue="teacher"><option value="teacher">Teacher</option><option value="administration">Administration</option><option value="payment_support">Payment support</option><option value="other">Other support</option></select></label><label className="check-row"><input name="isPrimary" type="checkbox" defaultChecked /><span>Primary teacher<small>Used in class reminders</small></span></label><button className="secondary-button" disabled={saving}>Link contact</button></form>}{contacts.length === 0 && <p className="muted">Add a reusable contact from More, then return here to link it.</p>}</section>{error && <p className="form-error">{error}</p>}<div className="archive-zone"><strong>Archive this class</strong><p>Future recurring sessions stop. Attendance, fees, payments, and contact history remain available.</p><button className="danger-button" disabled={saving} onClick={archive}>Archive class</button></div></div></Sheet>;
+}
+
+function HouseholdSettingsSheet({ household, onClose, onSaved }: { household: Snapshot["household"]; onClose: () => void; onSaved: () => Promise<void> }) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setSaving(true); setError(null);
+    const response = await fetch("/api/household", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(Object.fromEntries(new FormData(event.currentTarget))) });
+    if (!response.ok) { const data = await response.json() as { error?: string }; setError(data.error ?? "Could not update household settings."); setSaving(false); return; }
+    await onSaved();
+  }
+  return <Sheet title="Household settings" subtitle="Defaults for your family" onClose={onClose}><form onSubmit={submit} className="sheet-form"><label>Household name<input name="name" required maxLength={100} defaultValue={household.name} /></label><label>Default timezone<input name="timezone" required maxLength={80} defaultValue={household.timezone} list="classcue-timezones" /><datalist id="classcue-timezones"><option value="Asia/Dubai" /><option value="Asia/Kolkata" /><option value="Europe/London" /><option value="America/New_York" /><option value="Australia/Sydney" /></datalist></label><div className="calculation-note"><strong>For new classes and Today</strong><p>Changing this default updates the household’s Today date and new classes. Existing class schedules keep their own timezone.</p></div>{error && <p className="form-error">{error}</p>}<button className="primary-button" disabled={saving}>{saving ? "Saving…" : "Save household settings"}</button></form></Sheet>;
 }
 
 function FeeSetupSheet({ snapshot, onClose, onSaved }: { snapshot: Snapshot; onClose: () => void; onSaved: () => Promise<void> }) {
@@ -813,6 +936,7 @@ function localStartTime(session: ClassSession) { return new Intl.DateTimeFormat(
 function feeModelLabel(model: string) { return ({ monthly: "Monthly", term: "Term", package: "Prepaid package", per_session: "Per session" } as Record<string, string>)[model] ?? model; }
 function feeModelHint(model: string) { return ({ monthly: "One amount each month", term: "One amount for a term", package: "Prepaid session balance", per_session: "Rate × classes in period" } as Record<string, string>)[model] ?? ""; }
 function paymentMethodLabel(method: string) { return ({ cash: "Cash", bank_transfer: "Bank transfer", card: "Card", online: "Online", other: "Other" } as Record<string, string>)[method] ?? method; }
+function contactRoleLabel(role: string) { return ({ teacher: "Teacher", administration: "Administration", payment_support: "Payment support", other: "Other support" } as Record<string, string>)[role] ?? role; }
 function currencyDecimals(currency: string) { return ["BHD", "JOD", "KWD", "OMR", "TND"].includes(currency) ? 3 : ["JPY", "KRW", "VND"].includes(currency) ? 0 : 2; }
 function formatMoney(amountMinor: number, currency: string) { const decimals = currencyDecimals(currency); return new Intl.NumberFormat("en", { style: "currency", currency, minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(amountMinor / 10 ** decimals); }
 function minorToInput(amountMinor: number, currency: string) { const decimals = currencyDecimals(currency); return (amountMinor / 10 ** decimals).toFixed(decimals); }

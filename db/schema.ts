@@ -147,6 +147,9 @@ export const enrollmentContacts = sqliteTable(
   (table) => [
     primaryKey({ columns: [table.enrollmentId, table.contactId, table.role] }),
     index("enrollment_contacts_contact_idx").on(table.contactId),
+    uniqueIndex("enrollment_contacts_primary_teacher_uidx")
+      .on(table.enrollmentId)
+      .where(sql`${table.role} = 'teacher' AND ${table.isPrimary} = 1`),
   ],
 );
 

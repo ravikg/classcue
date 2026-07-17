@@ -36,6 +36,13 @@
       "when": 1784320612304,
       "tag": "0004_fixed_elektra",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1784321898664,
+      "tag": "0005_strange_sabretooth",
+      "breakpoints": true
     }
   ]
 }

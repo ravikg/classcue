@@ -6,7 +6,7 @@ The repository uses [vinext](https://github.com/cloudflare/vinext), with Cloudfl
 
 ## Current Status
 
-The product foundation, recurring classes, attendance, schedule exceptions, fees/payments, and parent-controlled reminders stages are complete. A signed-in parent can manage classes, attendance, makeups, flexible fee arrangements, due amounts, payments, reminders, and reviewed data-based suggestions without rewriting history.
+The core parent workflow is now usable end to end: family setup, reusable contacts, recurring classes, attendance, schedule exceptions, fees/payments, parent-controlled reminders, reviewed suggestions, and safe record maintenance. Historical attendance and financial records remain intact when a class is archived.
 
 ## Product Documentation
 
@@ -99,12 +99,24 @@ Dates and times use Gulf Standard Time (`Asia/Dubai`, UTC+4).
 - Added safe D1 migrations and regression coverage for reminder idempotency, household isolation, paid-fee cancellation, notification wiring, and reviewed suggestions.
 - Verified the production build, TypeScript, lint, contract tests, and an authenticated class-reminder and overdue-fee flow through acceptance, delivery, payment, and cancellation.
 
+### 18 July 2026, 1:08 AM GST — Contacts, settings, and record maintenance completed
+
+- Added reusable household contacts with name, institute, phone, email, notes, and per-class roles for teachers, administration, payment support, and other support.
+- Added contact reuse during class setup and class-level contact management, including exactly one primary teacher for reminder details.
+- Added editing for child profiles, class names, subjects, institutes, physical locations, and online-class links.
+- Added household name and default-timezone settings while preserving the timezone already assigned to existing class schedules.
+- Added optimistic version checks so an older screen cannot overwrite a newer class edit.
+- Added safe class archiving that stops future recurring sessions and active fee arrangements while preserving attendance, payment, fee, and contact history.
+- Added class restoration that resumes the latest recurring schedule and fee arrangement without recreating the enrollment.
+- Added an archived-class history surface and prevented contacts linked to active classes from being archived accidentally.
+- Added a database constraint for one primary teacher per enrollment plus household-scoped maintenance APIs and regression coverage.
+- Verified contact reuse across two children, primary-teacher handoff, stale-edit protection, profile and household updates, online links, archive/restore, and resumed session generation through an authenticated end-to-end flow.
+
 ### Next stage
 
-- Complete reusable contact management, household settings, and archive/edit flows.
 - Add closed-app Web Push through a delivery provider and scheduled worker; the current browser delivery runs while ClassCue is open.
 - Optionally add an OpenAI-powered suggestion adapter once an API credential is configured, while keeping parent review mandatory.
-- Run the final accessibility, responsive-layout, and production-readiness pass.
+- Add installable-app metadata and run the final accessibility, responsive-layout, privacy, and production-readiness pass.
 
 ## Prerequisites
 

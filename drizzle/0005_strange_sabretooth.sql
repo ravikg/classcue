@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `enrollment_contacts_primary_teacher_uidx` ON `enrollment_contacts` (`enrollment_id`) WHERE "enrollment_contacts"."role" = 'teacher' AND "enrollment_contacts"."is_primary" = 1;

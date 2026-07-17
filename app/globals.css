@@ -113,8 +113,11 @@ button { color: inherit; }
 .child-card h2 { margin: 0 0 3px; letter-spacing: -.03em; }
 .child-card p { margin: 0; color: var(--ink-soft); font-size: 13px; }
 .class-chips { display: flex; flex-wrap: wrap; gap: 9px; margin: 19px 0; }
-.class-chips > span { display: flex; flex-direction: column; padding: 9px 12px; background: var(--blue-soft); color: #275fbd; border-radius: 12px; font-weight: 800; font-size: 12px; }
+.class-chips > button { position: relative; display: flex; flex-direction: column; align-items: start; padding: 9px 34px 9px 12px; border: 0; background: var(--blue-soft); color: #275fbd; border-radius: 12px; font-weight: 800; font-size: 12px; text-align: left; cursor: pointer; }
 .class-chips small { opacity: .7; font-weight: 600; margin-top: 2px; }
+.class-chips em { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 8px; font-style: normal; opacity: .7; }
+.child-card-head > div:nth-child(2) { min-width: 0; flex: 1; }
+.icon-text-button { border: 0; background: none; color: var(--blue); font-size: 11px; font-weight: 800; cursor: pointer; }
 .attendance-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin: 19px 0; }
 .attendance-stats div { padding: 12px 10px; border-radius: 14px; background: #f0f4f1; min-width: 0; }
 .attendance-stats strong { display: block; font-size: 19px; letter-spacing: -.035em; }
@@ -256,6 +259,40 @@ button { color: inherit; }
 .delivery-history strong, .delivery-history small { display: block; font-size: 10px; }
 .delivery-history small { margin-top: 2px; color: var(--ink-soft); }
 .reminder-type-options { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.contact-list { display: grid; gap: 9px; }
+.contact-card { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; width: 100%; padding: 14px 16px; border: 1px solid var(--line); border-radius: 17px; background: var(--white); color: var(--ink); text-align: left; cursor: pointer; }
+.contact-avatar { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 13px; background: var(--blue-soft); color: var(--blue); font-size: 11px; font-weight: 900; }
+.contact-card > span:nth-child(2) { display: grid; gap: 2px; }
+.contact-card small, .contact-card em { color: var(--ink-soft); font-size: 9px; font-style: normal; }
+.contact-card b { color: var(--ink-soft); font-size: 20px; }
+.archive-list { overflow: hidden; border: 1px solid var(--line); border-radius: 18px; background: var(--white); }
+.archive-list article { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.archive-list article:last-child { border-bottom: 0; }
+.archive-list article > div { display: grid; gap: 3px; }
+.archive-list strong { font-size: 11px; }
+.archive-list small { color: var(--ink-soft); font-size: 9px; }
+.archive-list button { flex: none; min-height: 34px; padding: 0 12px; }
+.management-stack { display: grid; gap: 24px; }
+.manage-contacts { display: grid; gap: 10px; padding-top: 20px; border-top: 1px solid var(--line); }
+.linked-contact { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 13px; border-radius: 13px; background: #f1f4f1; }
+.linked-contact span { display: grid; gap: 2px; }
+.linked-contact strong { font-size: 11px; }
+.linked-contact small { color: var(--ink-soft); font-size: 9px; }
+.linked-contact button { border: 0; background: none; color: var(--coral); font-size: 9px; font-weight: 850; cursor: pointer; }
+.linked-contact > div { display: flex; gap: 8px; }
+.linked-contact > div button:first-child:not(:last-child) { color: var(--blue); }
+.link-contact-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 14px; border-radius: 16px; background: var(--blue-soft); }
+.link-contact-form label { font-size: 10px; font-weight: 800; }
+.link-contact-form select { display: block; width: 100%; height: 42px; margin-top: 6px; padding: 0 10px; border: 1px solid #cbd7e9; border-radius: 11px; background: white; }
+.link-contact-form .check-row, .link-contact-form button { grid-column: 1 / -1; }
+.linked-records { display: grid; gap: 8px; padding: 14px; border-radius: 16px; background: #f1f4f1; }
+.linked-records > strong { font-size: 11px; }
+.linked-records > span { display: grid; gap: 2px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 11px; font-weight: 750; }
+.linked-records small { color: var(--ink-soft); font-size: 9px; }
+.archive-zone { padding: 16px; border: 1px solid #edc6bd; border-radius: 17px; background: var(--coral-soft); }
+.archive-zone strong { font-size: 12px; }
+.archive-zone p { margin: 4px 0 13px; color: #8c4c3f; font-size: 10px; line-height: 1.45; }
+.danger-button { min-height: 42px; padding: 0 15px; border: 1px solid #d26551; border-radius: 12px; background: transparent; color: #ae412e; font-size: 11px; font-weight: 850; cursor: pointer; }
 
 .bottom-nav { position: fixed; z-index: 25; bottom: max(12px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: min(calc(100% - 24px), 700px); display: grid; grid-template-columns: repeat(4, 1fr); padding: 8px; border: 1px solid rgba(18,53,45,.1); border-radius: 22px; background: rgba(255,254,250,.94); backdrop-filter: blur(22px); box-shadow: 0 18px 45px rgba(18,53,45,.16); }
 .bottom-nav button { display: flex; flex-direction: column; align-items: center; gap: 3px; min-height: 52px; justify-content: center; border: 0; border-radius: 15px; background: none; color: #71817c; font-size: 10px; font-weight: 750; cursor: pointer; }
@@ -366,6 +403,9 @@ button { color: inherit; }
   .reminder-type-options { grid-template-columns: 1fr; }
   .suggestion-label { flex-direction: column; gap: 3px; }
   .suggestion-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .link-contact-form { grid-template-columns: 1fr; }
+  .link-contact-form .check-row, .link-contact-form button { grid-column: auto; }
+  .archive-list article { align-items: start; }
 }
 
 @media (prefers-reduced-motion: reduce) {

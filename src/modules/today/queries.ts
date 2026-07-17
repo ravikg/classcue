@@ -26,6 +26,9 @@ export async function getClassCueSnapshot(context: HouseholdContext) {
       name: enrollments.displayName,
       subject: enrollments.subject,
       location: enrollments.location,
+      onlineUrl: enrollments.onlineUrl,
+      timezone: enrollments.timezone,
+      version: enrollments.version,
       providerName: providers.name,
     })
     .from(enrollments)
@@ -53,6 +56,7 @@ export async function getClassCueSnapshot(context: HouseholdContext) {
       subject: enrollments.subject,
       providerName: providers.name,
       location: sql<string | null>`coalesce(${sessions.locationOverride}, ${enrollments.location})`,
+      onlineUrl: sql<string | null>`coalesce(${sessions.onlineUrlOverride}, ${enrollments.onlineUrl})`,
       localDate: sessions.localDate,
       plannedStartAt: sessions.plannedStartAt,
       plannedEndAt: sessions.plannedEndAt,
@@ -68,6 +72,7 @@ export async function getClassCueSnapshot(context: HouseholdContext) {
       punctuality: attendanceRecords.punctuality,
       minutesLate: attendanceRecords.minutesLate,
       attendanceNote: attendanceRecords.note,
+      enrollmentStatus: enrollments.status,
     })
     .from(sessions)
     .innerJoin(enrollments, eq(sessions.enrollmentId, enrollments.id))
@@ -184,6 +189,6 @@ export async function getClassCueSnapshot(context: HouseholdContext) {
           .slice(0, 8),
       };
     }),
-    upcomingSessions: sessionResults,
+    upcomingSessions: sessionResults.filter((session) => session.enrollmentStatus === "active"),
   };
 }

@@ -392,12 +392,61 @@ export const reminderJobs = sqliteTable(
     providerMessageId: text("provider_message_id"),
     lastError: text("last_error"),
     sentAt: text("sent_at"),
+    nextAttemptAt: text("next_attempt_at"),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
     uniqueIndex("reminder_jobs_idempotency_uidx").on(table.ruleId, table.relatedRecordId, table.scheduledFor),
     index("reminder_jobs_status_schedule_idx").on(table.status, table.scheduledFor),
+  ],
+);
+
+export const pushSubscriptions = sqliteTable(
+  "push_subscriptions",
+  {
+    id: text("id").primaryKey(),
+    householdId: text("household_id")
+      .notNull()
+      .references(() => households.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    endpoint: text("endpoint").notNull(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    deviceLabel: text("device_label"),
+    userAgent: text("user_agent"),
+    status: text("status").notNull().default("active"),
+    failureCount: integer("failure_count").notNull().default(0),
+    lastSuccessAt: text("last_success_at"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("push_subscriptions_endpoint_uidx").on(table.endpoint),
+    index("push_subscriptions_household_status_idx").on(table.householdId, table.status),
+  ],
+);
+
+export const pushDeliveries = sqliteTable(
+  "push_deliveries",
+  {
+    id: text("id").primaryKey(),
+    reminderJobId: text("reminder_job_id")
+      .notNull()
+      .references(() => reminderJobs.id, { onDelete: "cascade" }),
+    pushSubscriptionId: text("push_subscription_id")
+      .notNull()
+      .references(() => pushSubscriptions.id, { onDelete: "cascade" }),
+    status: text("status").notNull(),
+    httpStatus: integer("http_status"),
+    errorCode: text("error_code"),
+    sentAt: text("sent_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("push_deliveries_job_subscription_uidx").on(table.reminderJobId, table.pushSubscriptionId),
+    index("push_deliveries_status_idx").on(table.status, table.createdAt),
   ],
 );
 

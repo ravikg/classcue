@@ -14,6 +14,11 @@ const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
 const localBindingConfig = {
   main: "./worker/index.ts",
   compatibility_flags: ["nodejs_compat"],
+  triggers: { crons: ["* * * * *"] },
+  vars: Object.fromEntries(
+    ["VAPID_PUBLIC_KEY", "VAPID_PRIVATE_KEY", "VAPID_SUBJECT"]
+      .flatMap((key) => process.env[key] ? [[key, process.env[key]]] : []),
+  ),
   d1_databases: d1
     ? [
         {

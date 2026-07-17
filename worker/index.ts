@@ -1,10 +1,15 @@
 /** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
+import { dispatchDuePushJobs } from "../src/modules/reminders/push-dispatcher";
+import { ensureDatabase } from "../db";
 
 interface Env {
   ASSETS: Fetcher;
   DB: D1Database;
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
+  VAPID_SUBJECT?: string;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
@@ -41,6 +46,9 @@ const worker = {
     }
 
     return handler.fetch(request, env, ctx);
+  },
+  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(ensureDatabase().then(() => dispatchDuePushJobs(env.DB, env)));
   },
 };
 

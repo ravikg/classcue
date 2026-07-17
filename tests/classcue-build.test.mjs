@@ -138,7 +138,30 @@ test("suggestions require explicit parent review and use the normal reminder com
   assert.match(reviewRoute, /decision !== "accept" && body\.decision !== "dismiss"/);
   assert.match(ui, /Rule engine · not generative AI/);
   assert.match(ui, /Saving creates or updates this one rule/);
-  assert.match(ui, /ClassCue checks for due reminders while the app is open/);
+  assert.match(ui, /ClassCue can notify this device when the app is closed/);
+});
+
+test("closed-app push is household scoped, scheduled, and retryable", async () => {
+  const [migration, route, dispatcher, worker, vite, ui] = await Promise.all([
+    readFile(new URL("drizzle/0006_third_skrulls.sql", root), "utf8"),
+    readFile(new URL("app/api/push-subscriptions/route.ts", root), "utf8"),
+    readFile(new URL("src/modules/reminders/push-dispatcher.ts", root), "utf8"),
+    readFile(new URL("worker/index.ts", root), "utf8"),
+    readFile(new URL("vite.config.ts", root), "utf8"),
+    readFile(new URL("app/ClassCueApp.tsx", root), "utf8"),
+  ]);
+
+  assert.match(migration, /CREATE TABLE `push_subscriptions`/);
+  assert.match(migration, /CREATE TABLE `push_deliveries`/);
+  assert.match(route, /household_id = \? AND user_id = \?/);
+  assert.doesNotMatch(route, /privateKey:\s*env\.VAPID_PRIVATE_KEY/);
+  assert.match(dispatcher, /jobs\.attempts < 8/);
+  assert.match(dispatcher, /statusCode === 404 \|\| statusCode === 410/);
+  assert.match(dispatcher, /delivery_channel = 'web_push'/);
+  assert.match(worker, /async scheduled/);
+  assert.match(vite, /crons: \["\* \* \* \* \*"\]/);
+  assert.match(ui, /registration\.pushManager\.subscribe/);
+  assert.match(ui, /add ClassCue to your Home Screen first/);
 });
 
 test("contacts are reusable and one primary teacher is enforced per class", async () => {

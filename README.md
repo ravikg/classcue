@@ -123,11 +123,21 @@ Dates and times use Gulf Standard Time (`Asia/Dubai`, UTC+4).
 - Verified the generated manifest content type and payload, all app-icon responses, service-worker delivery, cross-household isolation for new maintenance routes, and the complete production build.
 - Expanded the regression suite to 11 passing checks covering the installable phone surface and the rule that private app data is never cached offline.
 
+### 18 July 2026, 1:29 AM GST — Closed-app phone notifications completed
+
+- Added household- and user-scoped Web Push subscriptions so each signed-in parent controls notification delivery per device.
+- Added a scheduled worker that checks due reminder jobs every minute and delivers class, fee-due, and overdue-fee notifications while ClassCue is closed.
+- Added per-device delivery history, retry backoff, an eight-attempt ceiling, and automatic expiry for invalid push subscriptions.
+- Added production VAPID configuration through Sites environment variables; the private signing key is stored as a secret and is not committed to Git.
+- Added phone notification enable/disable controls, accurate closed-app status, and iPhone/iPad guidance to install ClassCue before enabling Web Push.
+- Recalculate reminder jobs immediately after session, recurrence, fee, archive, and restore changes so scheduled delivery does not depend on opening the app again.
+- Preserved the in-app reminder inbox and open-app browser delivery as fallbacks when notifications are unsupported, blocked, or disabled.
+- Verified 12 regression checks, TypeScript, ESLint, the production build, and the emitted one-minute cron configuration.
+
 ### Next stage
 
-- Add closed-app Web Push through a delivery provider and scheduled worker; the current browser delivery runs while ClassCue is open.
+- Deploy this notification stage and complete a live-device enable/send/receive acceptance check.
 - Optionally add an OpenAI-powered suggestion adapter once an API credential is configured, while keeping parent review mandatory.
-- Complete the final live-device acceptance check after closed-app push is connected.
 
 ## Prerequisites
 

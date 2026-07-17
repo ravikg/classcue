@@ -6,6 +6,7 @@ import sessionLocationMigration from "@/drizzle/0002_oval_cable.sql?raw";
 import billingMigration from "@/drizzle/0003_cute_guardian.sql?raw";
 import reminderMigration from "@/drizzle/0004_fixed_elektra.sql?raw";
 import maintenanceMigration from "@/drizzle/0005_strange_sabretooth.sql?raw";
+import pushMigration from "@/drizzle/0006_third_skrulls.sql?raw";
 import * as schema from "./schema";
 
 let initialization: Promise<void> | null = null;
@@ -77,6 +78,15 @@ async function initializeDatabase(d1: D1Database) {
   const maintenanceStatements = idempotentCreateStatements(maintenanceMigration);
   if (maintenanceStatements.length > 0) {
     await d1.batch(maintenanceStatements.map((statement) => d1.prepare(statement)));
+  }
+
+  const pushStatements = idempotentCreateStatements(pushMigration).filter((statement) => !statement.startsWith("ALTER TABLE"));
+  if (pushStatements.length > 0) {
+    await d1.batch(pushStatements.map((statement) => d1.prepare(statement)));
+  }
+  const reminderJobColumns = await d1.prepare("SELECT name FROM pragma_table_info('reminder_jobs') WHERE name = 'next_attempt_at'").all();
+  if (reminderJobColumns.results.length === 0) {
+    await d1.prepare("ALTER TABLE reminder_jobs ADD next_attempt_at text").run();
   }
 }
 

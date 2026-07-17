@@ -217,6 +217,8 @@ export function ClassCueApp({ displayName }: { displayName: string }) {
   const [editingContact, setEditingContact] = useState<Contact | "new" | null>(null);
   const [householdSettingsOpen, setHouseholdSettingsOpen] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">("default");
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushConfigured, setPushConfigured] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
@@ -237,6 +239,7 @@ export function ClassCueApp({ displayName }: { displayName: string }) {
     const timer = window.setTimeout(() => {
       load().catch((reason: Error) => setError(reason.message));
       setNotificationPermission("Notification" in window ? Notification.permission : "unsupported");
+      inspectPushSubscription().then((state) => { setPushEnabled(state.enabled); setPushConfigured(state.configured); }).catch(() => undefined);
     }, 0);
     return () => window.clearTimeout(timer);
   }, [load]);
@@ -283,11 +286,38 @@ export function ClassCueApp({ displayName }: { displayName: string }) {
     setActionError(null);
     if (!("Notification" in window) || !("serviceWorker" in navigator)) { setNotificationPermission("unsupported"); return; }
     try {
-      await navigator.serviceWorker.register("/classcue-sw.js");
+      if (isIOS && !isStandalone) { setActionError("On iPhone or iPad, add ClassCue to your Home Screen first, then enable notifications from the installed app."); return; }
+      const registration = await navigator.serviceWorker.register("/classcue-sw.js");
       const permission = await Notification.requestPermission();
       setNotificationPermission(permission);
-      if (permission === "granted") { await deliverDueNotifications(); await load(); }
-    } catch { setActionError("Notifications could not be enabled on this device. Your in-app reminder inbox still works."); }
+      if (permission === "granted") {
+        const configResponse = await fetch("/api/push-subscriptions", { cache: "no-store" });
+        const config = await configResponse.json() as { configured?: boolean; publicKey?: string | null; error?: string };
+        setPushConfigured(Boolean(config.configured));
+        if (!configResponse.ok) throw new Error(config.error ?? "Notification setup could not be loaded.");
+        if (!config.configured || !config.publicKey || !("PushManager" in window)) throw new Error("Closed-app notifications are not configured yet.");
+        const existing = await registration.pushManager.getSubscription();
+        const subscription = existing ?? await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: base64urlToUint8Array(config.publicKey) });
+        const saved = await fetch("/api/push-subscriptions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...subscription.toJSON(), endpoint: subscription.endpoint, deviceLabel: deviceLabel() }) });
+        if (!saved.ok) { const data = await saved.json() as { error?: string }; throw new Error(data.error ?? "This device could not be registered."); }
+        setPushEnabled(true);
+        await deliverDueNotifications();
+        await load();
+      }
+    } catch (reason) { setActionError(reason instanceof Error ? `${reason.message} Your in-app reminder inbox still works.` : "Notifications could not be enabled on this device. Your in-app reminder inbox still works."); }
+  }
+
+  async function disableNotifications() {
+    setActionError(null);
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      if (subscription) {
+        await fetch("/api/push-subscriptions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "unsubscribe", endpoint: subscription.endpoint }) });
+        await subscription.unsubscribe();
+      }
+      setPushEnabled(false);
+    } catch { setActionError("This device could not be removed. Try again from the same browser."); }
   }
 
   async function toggleReminder(rule: ReminderRule) {
@@ -348,7 +378,7 @@ export function ClassCueApp({ displayName }: { displayName: string }) {
           {tab === "today" && <TodayView snapshot={snapshot} onAddChild={() => setSheet("child")} onAddClass={() => setSheet("enrollment")} onAttendance={openAttendance} onSchedule={setScheduleSession} onPayment={setPaymentCharge} onReminderAction={actOnReminder} />}
           {tab === "children" && <ChildrenView snapshot={snapshot} onAddChild={() => setSheet("child")} onAddClass={() => setSheet("enrollment")} onAttendance={openAttendance} onEditChild={setEditingChild} onManageEnrollment={setManagingEnrollment} />}
           {tab === "fees" && <FeesView snapshot={snapshot} onSetup={() => setFeeSetupOpen(true)} onPayment={setPaymentCharge} onAdjust={setAdjustCharge} onNewCharge={setNewChargeArrangement} />}
-          {tab === "more" && <MoreView snapshot={snapshot} notificationPermission={notificationPermission} onEnableNotifications={enableNotifications} onSetupReminder={() => setReminderSetupOpen(true)} onToggleReminder={toggleReminder} onReminderAction={actOnReminder} onReviewSuggestion={reviewSuggestion} onAddContact={() => setEditingContact("new")} onEditContact={setEditingContact} onHouseholdSettings={() => setHouseholdSettingsOpen(true)} onRestore={restoreEnrollment} installAvailable={Boolean(installPrompt)} isStandalone={isStandalone} isIOS={isIOS} onInstall={installApp} />}
+          {tab === "more" && <MoreView snapshot={snapshot} notificationPermission={notificationPermission} pushEnabled={pushEnabled} pushConfigured={pushConfigured} onEnableNotifications={enableNotifications} onDisableNotifications={disableNotifications} onSetupReminder={() => setReminderSetupOpen(true)} onToggleReminder={toggleReminder} onReminderAction={actOnReminder} onReviewSuggestion={reviewSuggestion} onAddContact={() => setEditingContact("new")} onEditContact={setEditingContact} onHouseholdSettings={() => setHouseholdSettingsOpen(true)} onRestore={restoreEnrollment} installAvailable={Boolean(installPrompt)} isStandalone={isStandalone} isIOS={isIOS} onInstall={installApp} />}
         </div>
       )}
 
@@ -503,7 +533,7 @@ function ChildrenView({ snapshot, onAddChild, onAddClass, onAttendance, onEditCh
   );
 }
 
-function MoreView({ snapshot, notificationPermission, onEnableNotifications, onSetupReminder, onToggleReminder, onReminderAction, onReviewSuggestion, onAddContact, onEditContact, onHouseholdSettings, onRestore, installAvailable, isStandalone, isIOS, onInstall }: { snapshot: Snapshot; notificationPermission: NotificationPermission | "unsupported"; onEnableNotifications: () => Promise<void>; onSetupReminder: () => void; onToggleReminder: (rule: ReminderRule) => Promise<void>; onReminderAction: (job: ReminderJob, status: "delivered" | "dismissed") => Promise<void>; onReviewSuggestion: (suggestion: Suggestion, decision: "accept" | "dismiss") => Promise<void>; onAddContact: () => void; onEditContact: (contact: Contact) => void; onHouseholdSettings: () => void; onRestore: (enrollment: ArchivedEnrollment) => Promise<void>; installAvailable: boolean; isStandalone: boolean; isIOS: boolean; onInstall: () => Promise<void> }) {
+function MoreView({ snapshot, notificationPermission, pushEnabled, pushConfigured, onEnableNotifications, onDisableNotifications, onSetupReminder, onToggleReminder, onReminderAction, onReviewSuggestion, onAddContact, onEditContact, onHouseholdSettings, onRestore, installAvailable, isStandalone, isIOS, onInstall }: { snapshot: Snapshot; notificationPermission: NotificationPermission | "unsupported"; pushEnabled: boolean; pushConfigured: boolean; onEnableNotifications: () => Promise<void>; onDisableNotifications: () => Promise<void>; onSetupReminder: () => void; onToggleReminder: (rule: ReminderRule) => Promise<void>; onReminderAction: (job: ReminderJob, status: "delivered" | "dismissed") => Promise<void>; onReviewSuggestion: (suggestion: Suggestion, decision: "accept" | "dismiss") => Promise<void>; onAddContact: () => void; onEditContact: (contact: Contact) => void; onHouseholdSettings: () => void; onRestore: (enrollment: ArchivedEnrollment) => Promise<void>; installAvailable: boolean; isStandalone: boolean; isIOS: boolean; onInstall: () => Promise<void> }) {
   return (
     <>
       <section className="page-intro"><p className="eyebrow">Reminders and account</p><h1>More</h1><p>Control what ClassCue brings to your attention. Nothing is shared or changed without your action.</p></section>
@@ -511,9 +541,9 @@ function MoreView({ snapshot, notificationPermission, onEnableNotifications, onS
         <div className="install-icon">C</div><div><span>Phone access</span><strong>{isStandalone ? "Installed on this device" : "Keep ClassCue on your home screen"}</strong><p>{isStandalone ? "ClassCue opens like an app from your phone." : isIOS && !installAvailable ? "In Safari, tap Share, then Add to Home Screen." : "Install for faster, full-screen access without finding the browser tab."}</p></div>
         {installAvailable && !isStandalone && <button className="primary-button" onClick={() => onInstall()}>Install ClassCue</button>}
       </section>
-      <section className={`notification-card ${notificationPermission}`}>
-        <div className="notification-icon">◉</div><div><span>Browser notifications</span><strong>{notificationPermission === "granted" ? "Enabled on this device" : notificationPermission === "denied" ? "Blocked in browser settings" : notificationPermission === "unsupported" ? "Not supported on this device" : "Not enabled yet"}</strong><p>ClassCue checks for due reminders while the app is open. Your reminder inbox remains available either way.</p></div>
-        {notificationPermission === "default" && <button className="primary-button" onClick={() => onEnableNotifications()}>Enable notifications</button>}
+      <section className={`notification-card ${pushEnabled ? "granted" : notificationPermission}`}>
+        <div className="notification-icon">◉</div><div><span>Phone notifications</span><strong>{pushEnabled ? "Enabled on this device" : notificationPermission === "denied" ? "Blocked in browser settings" : notificationPermission === "unsupported" ? "Not supported on this device" : !pushConfigured ? "Service setup pending" : "Not enabled yet"}</strong><p>{pushEnabled ? "ClassCue can notify this device when the app is closed." : "Your in-app reminder inbox remains available even without phone notifications."}</p></div>
+        {pushEnabled ? <button className="text-button" onClick={() => onDisableNotifications()}>Turn off</button> : notificationPermission !== "denied" && notificationPermission !== "unsupported" && <button className="primary-button" onClick={() => onEnableNotifications()}>Enable notifications</button>}
       </section>
 
       <div className="section-heading more-section-heading"><div><p className="eyebrow">Your rules</p><h2>Reminder timing</h2></div><button className="text-button" onClick={onSetupReminder}>+ Configure</button></div>
@@ -1000,6 +1030,24 @@ function reminderTypeLabel(type: string) { return ({ class: "Upcoming class", fe
 function reminderTimingLabel(rule: ReminderRule) { if (rule.type === "fee_overdue") return `Repeats every ${Math.round((rule.repeatIntervalMinutes ?? 1440) / 1440)} ${Math.round((rule.repeatIntervalMinutes ?? 1440) / 1440) === 1 ? "day" : "days"} until paid`; if (rule.leadMinutes === 0) return "On the due date"; if (rule.leadMinutes < 60) return `${rule.leadMinutes} minutes before`; if (rule.leadMinutes < 1440) return `${rule.leadMinutes / 60} ${rule.leadMinutes === 60 ? "hour" : "hours"} before`; return `${rule.leadMinutes / 1440} ${rule.leadMinutes === 1440 ? "day" : "days"} before`; }
 function dateTimeLabel(value: string) { return new Intl.DateTimeFormat("en", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(new Date(value)); }
 async function shareReminder(job: ReminderJob) { if (navigator.share) await navigator.share({ title: job.title, text: job.shareText }).catch(() => undefined); else await navigator.clipboard?.writeText(job.shareText).catch(() => undefined); }
+async function inspectPushSubscription(): Promise<{ enabled: boolean; configured: boolean }> {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return { enabled: false, configured: false };
+  const response = await fetch("/api/push-subscriptions", { cache: "no-store" });
+  if (!response.ok) return { enabled: false, configured: false };
+  const data = await response.json() as { configured?: boolean };
+  const registration = await navigator.serviceWorker.getRegistration("/");
+  const subscription = await registration?.pushManager.getSubscription();
+  return { enabled: Boolean(subscription), configured: Boolean(data.configured) };
+}
+function base64urlToUint8Array(value: string) {
+  const padding = "=".repeat((4 - value.length % 4) % 4);
+  const decoded = atob((value + padding).replaceAll("-", "+").replaceAll("_", "/"));
+  return Uint8Array.from(decoded, (character) => character.charCodeAt(0));
+}
+function deviceLabel() {
+  const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  return `${mobile ? "Phone or tablet" : "Computer"} · ${navigator.platform || "browser"}`.slice(0, 100);
+}
 async function deliverDueNotifications() {
   if (!("Notification" in window) || Notification.permission !== "granted" || !("serviceWorker" in navigator)) return 0;
   const registration = await navigator.serviceWorker.register("/classcue-sw.js");

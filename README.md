@@ -15,6 +15,7 @@ The core parent workflow is now usable end to end: family setup, reusable contac
 - `docs/user-journeys.md` — navigation, screen map, interaction rules, and core journeys.
 - `docs/data-model.md` — entities, relationships, invariants, indexes, and migration sequence.
 - `docs/architecture.md` — runtime choices, module boundaries, request flows, security, and implementation sequence.
+- `docs/current-deployment-and-aws-migration.md` — verified live deployment inventory, support model, AWS target architecture, migration, cutover, and rollback runbook.
 - `outputs/classcue-user-journey/` — editable HTML mockups, rendered boards, and the PowerPoint walkthrough.
 
 ## Project Progress
@@ -159,10 +160,21 @@ Dates and times use Gulf Standard Time (`Asia/Dubai`, UTC+4).
 - Confirmed the production dependency audit now reports zero known vulnerabilities without downgrading Next.js or using a forced breaking update.
 - Reverified all 13 regression checks, TypeScript, ESLint, and the production build after the dependency change.
 
+### 18 July 2026, 8:07 AM GST — Current deployment and AWS migration captured
+
+- Documented the active private Sites deployment, Git source, Worker/Vinext runtime, D1 database, identity headers, one-minute notification scheduler, Web Push configuration, and optional AI adapter.
+- Recorded that the current access policy allows only the owner; broader use requires an intentional private-beta, workspace, or public access-policy change while retaining household isolation.
+- Identified the exact Cloudflare/Sites coupling that prevents an unchanged EC2 deployment: Worker runtime bindings, D1/SQLite, Sites-owned identity, and the scheduled Worker entry point.
+- Designed an AWS target using an Application Load Balancer, EC2 Auto Scaling, Cognito/OIDC, RDS PostgreSQL Multi-AZ with RDS Proxy, EventBridge Scheduler and Lambda, Secrets Manager, CloudWatch, ECR, and GitHub OIDC.
+- Added a staged refactor, D1-to-PostgreSQL migration order, reconciliation checks, production cutover and rollback process, operational dashboards, and a privacy-aware admin support model.
+- Confirmed this stage is architecture documentation only; the AWS environment and migration have not yet been implemented.
+
 ### Next stage
 
-- Configure the OpenAI API key, run one live structured-output acceptance call, and deploy the connected AI stage.
-- Complete the live-device notification enable/send/receive acceptance check.
+- Choose the beta access model, AWS Region, production domain, and EC2 versus ECS/Fargate runtime.
+- Build the read-mostly admin/support diagnostics needed before inviting more parents.
+- Begin the portability phase by separating identity, database, configuration, storage, and scheduled-job adapters.
+- Configure the optional OpenAI API key and complete real-device AI/push acceptance when those external prerequisites are available.
 
 ## Prerequisites
 
